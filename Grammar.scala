@@ -1,7 +1,7 @@
 /** Bidirectional grammar transformation:
   * Grammar is to syntax trees as datatype is to its inhabitants.
   *
-  * Examples:
+  * Usage for grammars:
   *
   * - Bacchus-Naur form
   * - inlining of rules at a position until all left-recursions are explicit
@@ -9,6 +9,10 @@
   * - left-factoring
   * - removing explicit parentheses
   * - remove explicit precedence from grammar
+  *
+  * Usage for datatypes:
+  *
+  * - convert mutually recursive datatypes to singly recursive datatypes
   *
   * Transformations:
   *

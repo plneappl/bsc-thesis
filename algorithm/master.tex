@@ -5,8 +5,11 @@
 
 \begin{document}
 
+\null
+\vskip 3cm plus 1cm
 \title{Syntax tree transformation as dialgebraic fold}
 \maketitle
+\vskip 3cm plus 1cm
 
 \section{Syntax tree transformations by example}
 
@@ -41,18 +44,16 @@ abstract syntax trees.
 This is the concrete syntax tree of the expression $3\times4+5$.
 \[
 \begin{tikzpicture}
-\path
-node{$C_1$}
+\path node{$C_1$}
+child { node{$C_2$}
   child { node{$S_3$}
     child { node{$S_4$} child { node{$F_5$} child { node{$3$} }}}
     child { node{$\times$} }
     child { node{$S_4$} child { node{$F_5$} child { node{$4$} }}}
   }
-  child { node{$+$} }
-  child { node{$C_2$}
-    child{ node{$S_4$} child{ node{$F_5$} child{ node{$5$} }}}
-  }
-
+}
+child { node{$+$} }
+child{ node{$S_4$} child{ node{$F_5$} child{ node{$5$} }}}
 ;
 \end{tikzpicture}
 \]

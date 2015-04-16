@@ -3,7 +3,7 @@
   *
   * Usage for grammars:
   *
-  * - Bacchus-Naur form
+  * - Chomsky normal form
   * - inlining of rules at a position until all left-recursions are explicit
   * - left-recursion elimination
   * - left-factoring

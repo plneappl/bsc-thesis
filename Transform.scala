@@ -90,7 +90,7 @@ object Transform {
 		to._2.foreach(println)
 		to._2.foreach(x => {
 			//apply the format strings to get the transformed rules
-			result = x.format(vars:_*) :: result
+			result = result :+ x.format(vars:_*) 
 		})
 		result
 	}

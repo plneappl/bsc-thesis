@@ -1,0 +1,58 @@
+\documentclass[a4paper]{article}
+
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+\newcommand{\tuple}[1]{\left( #1 \right)}
+\newcommand{\set}[1]{\left\lbrace #1 \right\rbrace}
+\newcommand{\N}{\mathbb{N}}
+
+\begin{document}
+\section*{Grammars}
+A grammar $G$ is a tuple 
+$$ G = \tuple{N, \Sigma, P, S} $$
+where \begin{itemize}
+\item[$N$] is a finite set of \textit{nonterminals}
+\item[$\Sigma$] is a finite set of \textit{terminals}, $\Sigma$ being disjoint from $N$
+\item[$P$] is a finite set of production rules, each rule of the form 
+$$ (\Sigma\cup N)^*N(\Sigma\cup N)^*\to (\Sigma\cup N)^* $$
+\item[$S\in N$] is the \textit{start symbol} of the grammar 
+\end{itemize}
+
+\subsection*{Kleene-operator}
+Given a set $M$, $M^*$ is defined as all concatenations of any number (even none) of all elements of $M$. A more formal definition of this could be 
+$$M^* = \bigcup_{n=0}^{\infty}M^n$$
+In language terms, these tuples are often written without the syntactical sugar, for example to represent a number like $1523$ over the alphabet $\Sigma=\set{0,1,2,3,4,5,6,7,8,9}$, you could use the tuple $\tuple{1,5,2,3}\in\Sigma^4\subseteq\Sigma^*$. Since the tuple representation is not very readable, we'll write $1523$ in most cases instead. The empty tuple is often written as $\epsilon$ or $\lambda$.
+
+\subsection*{Languages}
+A \textit{language} is a subset of all words over an alphabet $\Sigma$. \\
+Examples: $ \Sigma = \set{0,1,2,3,4,5,6,7,8,9} $
+\begin{itemize}
+\item[-] $N$ is equal to $\Sigma^*$
+\item[-] The set of all binary coded numbers is a subset of $\Sigma^*$
+\end{itemize}
+
+\subsubsection*{Languages produced from grammars}
+Grammars can be used to define a language. Given a grammar $G = \tuple{N, \Sigma, P, S}$, the set of all it's words $L(G)$ can be described as all words $w$ in $\Sigma^*$ where a sequence of derivations exists, such that $S\implies_G^* w$.
+
+\subsection*{Syntax trees}
+Syntax trees describe how words are formed from grammars. The parent node always contains the left hand side of a production rule, it's children nodes joined together are the corresponding right hand side.\\
+The root node is the start symbol, the leafs form the produced word.
+
+\subsection*{Context free grammars}
+Context free grammars are grammars with production rules being limited to only one symbol on the left hand side, therefore every rule has to look like 
+$$N \to (\Sigma\cup N)^* $$
+Context free grammars are much easier handled than those without this limitation, while still being powerful enough to describe the majority of a programming language and most other needed stuff like braced terms etc.
+
+\section*{Goal}
+The Goal of this thesis is to
+\begin{itemize}
+\item describe transformations between context free grammars
+\item apply such transformations
+\item generate transformations between the corresponding syntax trees
+\end{itemize}
+
+\section*{Sources}
+\url{http://en.wikipedia.org/wiki/Formal_grammar}
+\end{document}

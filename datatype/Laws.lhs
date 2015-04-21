@@ -1,3 +1,5 @@
+> {-# LANGUAGE RankNTypes #-}
+
 ================================================================
 Laws of obviously bidirectional grammar/datatype transformations
 ================================================================
@@ -140,3 +142,85 @@ and output production rules.
 
 It remains to determine the input format of the syntax tree
 transformation generator.
+
+
+Fixed-point views on grammars
+-----------------------------
+
+Experiment 1: Mutually recursive datatypes with Swierstra et
+al.'s Fix2
+
+> data Fix2 f g = In2 (f (Fix2 f g) (Fix2 g f))
+
+> data EveF eve odd = Zero | ESuc Int odd
+> data OddF odd eve = OSuc Int eve
+>
+> type Eve = Fix2 EveF OddF
+> type Odd = Fix2 OddF EveF
+>
+> esuc :: Int -> Odd -> Eve
+> esuc n = In2 . ESuc n
+>
+> zero :: Eve
+> zero = In2 Zero
+>
+> osuc :: Int -> Eve -> Odd
+> osuc n = In2 . OSuc n
+
+> map2 ::
+>    forall f g h k.
+>    (forall a b c d. (a -> c) -> (b -> d) -> f a b -> h c d) ->
+>    (forall a b c d. (a -> c) -> (b -> d) -> g a b -> k c d) ->
+>    Fix2 f g -> Fix2 h k
+>
+> map2 f2h g2k (In2 fg) =
+>   In2 $ f2h (map2 f2h g2k) (map2 g2k f2h) fg
+>
+> emap :: (a -> c) -> (b -> d) -> EveF a b -> EveF c d
+> emap f g Zero = Zero
+> emap f g (ESuc x o) = ESuc x (g o)
+>
+> omap :: (a -> c) -> (b -> d) -> OddF a b -> OddF c d
+> omap f g (OSuc x e) = OSuc x (g e)
+>
+>
+> data Fix f = In (f (Fix f))
+>
+> data ListF a b = Nil | Cons a b
+>
+> mapListF :: (a -> c) -> (b -> d) -> ListF a b -> ListF c d
+> mapListF f g Nil = Nil
+> mapListF f g (Cons x y) = Cons (f x) (g y)
+>
+> mapFix :: (forall a b. (a -> b) -> f a -> g b) ->
+>           Fix f -> Fix g
+> mapFix f (In v) = In (f (mapFix f) v)
+>
+> type List a = Fix (ListF a)
+>
+> foldList :: (ListF a b -> b) -> List a -> b
+> foldList f (In xs) = f (mapListF id (foldList f) xs)
+>
+> class Bifunctor f where
+>   bimap :: (a -> c) -> (b -> d) -> f a b -> f c d
+>
+> instance Bifunctor EveF where bimap = emap
+> instance Bifunctor OddF where bimap = omap
+>
+> fold2 :: (Bifunctor f, Bifunctor g) =>
+>          (f a b -> a) -> (g b a -> b) ->
+>          Fix2 f g -> a
+>
+> fold2 f g (In2 xs) =
+>   f (bimap (fold2 f g) (fold2 g f) xs)
+>
+> esum :: Eve -> Int
+> esum = fold2 eplus oplus where
+>   eplus Zero = 0
+>   eplus (ESuc x y) = x + y
+>   oplus (OSuc x y) = x + y
+>
+> xs :: Eve
+> xs = esuc 1 $ osuc 2 $ esuc 3 $ osuc 4 $ zero
+>
+> -- esum xs == 10

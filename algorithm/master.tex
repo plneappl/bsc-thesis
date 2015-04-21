@@ -3,6 +3,8 @@
 
 \gdef\R{\rightarrow}
 
+\newtheorem{lemma}[subsection]{Lemma}
+
 \begin{document}
 
 \null
@@ -210,13 +212,13 @@ From now on, we assume the existence of two indexed grammars, an
 
 An \textbf{information path} is a sequence of symbols
 \[
-(S^1,S^2,\ldots,S^m,T^n,\ldots,T^2,T^1),
+(S^m,\ldots,S^2,S^1,T^1,T^2,\ldots,T^n),
 \]
 such that
 \begin{enumerate}
-\item $S^1,\ldots,S^m$ are terminal or nonterminal symbols of the
+\item $S^m,\ldots,S^1$ are terminal or nonterminal symbols of the
 input grammar,
-\item $T^n,\ldots,T^1$ are terminal or nonterminal symbols of the
+\item $T^1,\ldots,T^n$ are terminal or nonterminal symbols of the
 output grammar,
 \end{enumerate}
 For example, in the transformation from the abstract grammar $A$
@@ -226,11 +228,11 @@ from $+^3$ to $+^6$ is the sequence $(+^3,P^2,+^6)$.
 An \textbf{information flow} is a collection of flow fragments. A
 \textbf{flow fragment} is basically a rewrite rule between
 different languages. Formally, a flow fragment is a tuple
-$(R,S,P)$, where
+$(Q,R,C)$, where
 \begin{enumerate}
-\item $R$ is a production rule or equation in the input grammar,
-\item $S$ is a production rule or equation in the output grammar,
-\item $P$ is a set of information paths.
+\item $Q$ is a production rule or equation in the input grammar,
+\item $R$ is a production rule or equation in the output grammar,
+\item $C$ is a collection of information paths.
 \end{enumerate}
 
 This is the information flow from the concrete grammar $C$ to the
@@ -255,12 +257,73 @@ grammar $N$ in Chomsky normal form:
 
 \section{Well-formed and well-behaved information flows}
 
-Well-formed information paths, well-formed flow fragments.
+This section describes the form an information flow must take in
+order to correspond to a syntax tree transformation. Intuitively,
+a well-behaved information flow describes a pattern-matching
+expression, a well-behaved flow fragment describes one case in
+the pattern-matching expression, and a well-behaved information
+path describes one variable in one case of the pattern-matching
+expression. Since variables are described by paths, they have
+exactly one binding occurrence and exactly one bound occurrence.
+In other words, case expresions described by information flows
+are necessarily linear.
 
-Unicity of insertions and deletions. Linearity of sources and
-destinations.
+\bigbreak
 
-Additional consistency requirements?
+$(S^m,\ldots,S^1,T^1,\ldots,T^n)$ is a \textbf{well-behaved
+information path} if
+\begin{itemize}
+\item for all $2\le i\le m$, the symbol of $S^{i-1}$ is the
+left-hand-side of the production rule containing $S^i$, and
+\item for all $n\ge j\ge 2$, the symbol of $T^{j-1}$ is the
+left-hand-side of the production rule containing $T^j$.
+\end{itemize}
+
+\bigbreak
+
+$P$ is a \textbf{compatible set} of information paths if for any
+two information paths $(S^m,\ldots,S^1,T^1,\ldots,T^n)$ and
+$(U^h,\ldots,U^1,V^1,\ldots,V^k)$ in $P$,
+\begin{itemize}
+\item there exists $i,j$ such that $S^i\neq U^i$ and $T^j\neq
+V^j$,
+\item if $S^i=U^i$ for all $i<x$, then $S^x$ and $U^x$ occurs in
+the same production,
+\item if $T^j=V^j$ for all $j<y$, then $T^y$ and $V^y$ occurs in
+the same production.
+\end{itemize}
+
+\bigbreak
+
+$(Q,R,C)$ is a \textbf{well-behaved flow fragment} if
+\begin{itemize}
+\item $C$ is a compatible set of well-behaved information paths,
+\item for each $(S^m,\ldots,S^1,T^1,\ldots,T^n)$ in $C$,
+\begin{itemize}
+\item $S^1$ occurs on the right-hand-side of the production $Q$,
+\item $T^1$ occurs on the right-hand-side of the production $R$.
+\end{itemize}
+\end{itemize}
+
+\bigbreak
+
+A \textbf{well-behaved information flow} consists of well-behaved
+flow fragments. The \textbf{inverse} of an information flow is
+obtained by reversing each information path and swapping the
+input and output symbols of each flow fragment.
+
+\begin{lemma}
+The inverse of a well-behaved information flow is well-behaved.
+\end{lemma}
+
+
+
+\section{Tree patterns and pattern-matching}
+
+Pattern matching seems easier to describe than information flows.
+Consider describing syntax tree transformations by case
+expressions instead of information flows.
+
 
 
 \section{Information flows as dialgebras}

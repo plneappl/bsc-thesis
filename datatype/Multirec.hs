@@ -122,6 +122,9 @@ forwardA (F6 LP (Const x) RP) = Const x
 forward :: Concrete a -> Abstract a
 forward = unConst . cata forwardA
 
--- Coalgebraic view is harder. Not sure if possible to encode in Haskell.
--- forwardC :: Coalgebra AbsF ()
-
+-- The corresponding coalgebra & the backward (co-)algebra are
+-- hard to define in Haskell due to lack of type functions.
+-- The idea of pattern-synonyms as polymorphic iterated
+-- dialgebras is heavy-weight and needs pages of category
+-- theoretic constructions. Maybe we skip the full development
+-- for now?

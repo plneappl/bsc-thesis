@@ -1,0 +1,11 @@
+Hinze, Jeuring, Löh.
+Type-indexed datatypes.
+
+Hosoya, Frisch, Castagna.
+Parametric polymorphism for XML (POPL 05).
+
+Hosoya, Pierce.
+Regular expression pattern matching for XML (POPL 01).
+
+Hosoya.
+Regular expression pattern matching: a simpler design (TR 03).

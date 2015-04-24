@@ -12,6 +12,17 @@
 %lang haskell
 %format pattern = "\mathbf{pattern}"
 
+%subst nested a = "\textrm{ " a " }"
+%format . = "."
+%format forall = "\ensuremath{\forall}"
+%format Gamma  = "\ensuremath{\Gamma}"
+
+\long\def\ignore#1{}
+\ignore{
+\begin{code}
+{-# LANGUAGE RankNTypes #-}
+\end{code}
+}
 
 
 \gdef\R{\rightarrow}
@@ -150,10 +161,10 @@ follows.
 \PAR
 \begin{code}
 -- String literals
-data Add  =  Add  -- +
-data Mul  =  Mul  -- $\times$
-data LP   =  LP   -- (
-data RP   =  RP   -- )
+data Add  =  Add  deriving (Show, Eq)  -- +
+data Mul  =  Mul  deriving (Show, Eq)  -- $\times$
+data LP   =  LP   deriving (Show, Eq)  -- (
+data RP   =  RP   deriving (Show, Eq)  -- )
 \end{code}
 
 \PAR
@@ -162,12 +173,15 @@ data RP   =  RP   -- )
 
 data C  =  C1 C Add S
         |  C2 S
+        deriving (Show, Eq)
 
 data S  =  S3 S Mul F
         |  S4 F
+        deriving (Show, Eq)
 
 data F  =  F5 Int
         |  F6 LP C RP
+        deriving (Show, Eq)
 \end{code}
 
 \PAR
@@ -178,6 +192,7 @@ data F  =  F5 Int
 data A  =  A1 A Add A
         |  A3 A Mul A
         |  A5 Int
+        deriving (Show, Eq)
 \end{code}
 \end{samepage}
 
@@ -188,10 +203,13 @@ data A  =  A1 A Add A
 data N  =  N1 N P
         |  N3 N Q
         |  N5 Int
+        deriving (Show, Eq)
 
 data P  =  P1 Add N
+        deriving (Show, Eq)
 
 data Q  =  Q3 Mul N
+        deriving (Show, Eq)
 \end{code}
 
 \PAR
@@ -244,5 +262,191 @@ and $N$:
 
 
 \section{From pattern synonyms to syntax tree transformations}
+
+We convert pattern synonyms to syntax tree transformations as folows.
+\begin{enumerate}
+\item Order pattern synonyms by inclusion. If there are unordered
+patterns with nonempty intersections, then proceed only if those
+patterns are consistent.
+\item Annotate patterns and \emph{all} occurrences of type variables
+by their types in the corresponding production rules.
+\item Generate mutually-recursive syntax tree transformations.
+\end{enumerate}
+We will discuss steps 2 and 3 first, so that the reader knows how
+it works as soon as possible. Step 1 is there as a safety measure
+and will be discussed last.
+
+\subsection{Fully type-annotated pattern synonyms}
+
+To generate mutually recursive syntax tree transformations, we
+need to know the type of \emph{all} occurrences of variables.
+We will annotate type synonyms according to the corresponding
+production rules. One variable are annotated different types
+depending on where it occurs.
+
+\PAR These are fully type-annotated pattern synonyms
+of the transformation between $C$ and $A$:
+
+< pattern C1 (x :: C) Add (y :: S)  :: C {--}  = {--}  A1 (x :: A) Add (y :: A)  :: A
+< pattern C2 (x :: S)               :: C {--}  = {--}  x :: A                    :: A
+< pattern S3 (x :: S) Mul (y :: F)  :: S {--}  = {--}  A3 (x :: A) Mul (y :: A)  :: A
+< pattern S4 (x :: F)               :: S {--}  = {--}  x :: A                    :: A
+< pattern F5 (n :: Int)             :: F {--}  = {--}  A5 (n :: Int)             :: A
+< pattern F6 LP (x :: C) RP         :: F {--}  = {--}  x :: A                    :: A
+
+\PAR These are pattern synonyms of the transformation between $A$
+and $N$:
+
+< pattern A1 (x :: A) Add (y :: A)  :: A {--}  = {--}  N1 (x :: N) (P1 Add (y :: N))  :: N
+< pattern A3 (x :: A) Mul (y :: A)  :: A {--}  = {--}  N3 (x :: N) (Q3 Mul (y :: N))  :: N
+< pattern A5 (n :: Int)             :: A {--}  = {--}  N5 (n :: Int)                  :: N
+
+\subsection{Mutually recursive syntax tree transformations}
+
+A fully type-annotated pattern synonym
+\quad
+|pattern LHS :: S = RHS :: T|
+\quad
+compiles to a case the definition of a function of type |S -> T|.
+These cases are built from themselves and from the identity function.
+The compilation of pattern synonyms is a 3-step process.
+\begin{enumerate}
+\item Put |id :: forall a. a -> a| into context.
+\item Group pattern synonyms according to type. Name one function per type
+and put all name-type pairs into context.
+\item Define the named functions in context by suffixing pattern synonyms
+matching their types. Inject functions from context before variables to
+make the function typecheck. For example, if |(x :: A)| occurs on
+left-hand-side of a pattern synonym and |(x :: N)| occurs on
+right-hand-side, then prefix |x| in the body of the function
+by the name associated with the type |A -> N| in the context.
+\end{enumerate}
+
+Let us carry out these steps on the transformation from $C$ to $A$.
+\begin{enumerate}
+\item Put |id| into context. Now the context is:
+
+< Gamma = id :: forall a. a -> a.
+
+\item Group pattern synonyms by types. We obtain the following types:
+\begin{align*}
+&& C \R A && S \R A && F \R A.
+\end{align*}
+Call these functions |c2a|, |s2a| and |f2a|. The context becomes:
+
+< Gamma = id :: forall a. a -> a, c2a :: C -> A, s2a :: S -> A, f2a :: F -> A.
+
+\item Generate definitions for the functions |c2a|, |s2a| and |f2a|,
+inserting conversions from the context as necessary.
+\end{enumerate}
+At the end, we obtain the following definitions.
+
+\begin{code}
+c2a :: C -> A
+c2a (C1 x Add y)  =  A1 (c2a x) Add (s2a y)
+c2a (C2 x)        =  s2a x
+
+s2a :: S -> A
+s2a (S3 x Mul y)  =  A3 (s2a x) Mul (f2a y)
+s2a (S4 x)        =  f2a x
+
+f2a :: F -> A
+f2a (F5 n)        =  A5 (id n)
+f2a (F6 LP x RP)  =  c2a x
+\end{code}
+
+\bigbreak
+As a second example, let's convert $A$ to $N$.
+
+\begin{code}
+a2n :: A -> N
+a2n (A1 x Add y)  =  N1 (a2n x) (P1 Add (a2n y))
+a2n (A3 x Mul y)  =  N3 (a2n x) (Q3 Mul (a2n y))
+a2n (A5 n)        =  N5 (id n)
+\end{code}
+
+\subsection{Backward transformation}
+
+Linear pattern synonyms are invertible; we just have to swap their
+left-hand-side and right-hand-side. Swapping the pattern synonyms
+between $C$ and $A$ give us the following synonyms:
+
+
+< pattern A1 (x :: A) Add (y :: A)  :: A  {--}  = {--}  C1 (x :: C) Add (y :: S)  :: C
+< pattern x :: A                    :: A  {--}  = {--}  C2 (x :: S)               :: C
+< pattern A3 (x :: A) Mul (y :: A)  :: A  {--}  = {--}  S3 (x :: S) Mul (y :: F)  :: S
+< pattern x :: A                    :: A  {--}  = {--}  S4 (x :: F)               :: S
+< pattern A5 (n :: Int)             :: A  {--}  = {--}  F5 (n :: Int)             :: F
+< pattern x :: A                    :: A  {--}  = {--}  F6 LP (x :: C) RP         :: F
+
+
+Compiling the backward pattern synonyms produce the backward
+transformations from $A$ to $C$.
+
+\begin{code}
+a2c :: A -> C
+a2c (A1 x Add y)  =  C1 (a2c x) Add (a2s y)
+a2c x             =  C2 (a2s x)
+
+a2s :: A -> S
+a2s (A3 x Mul y)  =  S3 (a2s x) Mul (a2f y)
+a2s x             =  S4 (a2f x)
+
+a2f :: A -> F
+a2f (A5 n)        =  F5 (id n)
+a2f x             =  F6 LP (a2c x) RP
+\end{code}
+
+Note that the pattern synonyms with |C2|, |S4| and |F6| come after
+the other patterns. That is because the left-hand-side of these
+synonyms are more general than the left-hand-side of other synonyms
+of the same type. We implement the strategy that if a pattern is
+more specific than other patterns, then it is tested first in the
+syntax tree transformation.
+
+\subsection{Sorting patterns by specificity}
+
+In order to decide which pattern comes first in a syntax tree
+transformation, we have to compare patterns to see which one
+is more specific. First-order unification helps us compare
+patterns for specificity.
+
+Two patterns $p,q$ are \textbf{unifiable} if there exists a
+substitution $\sigma$ such that $\sigma(p)=\sigma(q)$, in which
+case $\sigma$ is called a \textbf{unifier} of $p,q$. Non-unifiable
+patterns are said to be \textbf{disjoint}.
+
+A unifier $\sigma'$ of $p,q$ is the \textbf{most general unifier}
+if for all unifier $\sigma$ of $p,q$, there exists a substitution
+$\sigma_2$ such that $\sigma = \sigma_2 \circ \sigma'$. It is known
+that all unifiable pairs of patterns have most general unifiers.
+
+The \textbf{intersection} of patterns $p$ and $q$, written
+$p\cap q$, is
+\begin{itemize}
+\item the result
+$\sigma(p)=\sigma(q)$ with respect to a most general unifier
+if $p$ and $q$ are unifiable, and
+\item empty if $p$ and $q$ are disjoint.
+\end{itemize}
+
+A pattern $p$ is \textbf{more specific} than another pattern $q$,
+written $p <: q$, if
+\begin{itemize}
+\item $p$ and $q$ are unifiable, and
+\item the intersection of $p\cap q$ is $\alpha$-equivalent
+to $p$.
+\end{itemize}
+If neither $p <: q$ nor $q <: p$, then $p$ and $q$ are
+\textbf{incomparable}.
+
+Given a set of pattern synonyms of the same type, we require
+their left-hand-side to form disjoint classes of patterns
+linearly ordered by specificity. If this is not the case,
+then there exist incomparable unifiable patterns $p,q$ with
+nonempty intersection. In this case we require all
+unifier $\sigma$ of $p,q$ to also unify the right-hand-side
+of the pattern synonyms where $p$ and $q$ occur.
+
 
 \end{document}

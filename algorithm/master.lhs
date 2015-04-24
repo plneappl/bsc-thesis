@@ -1,5 +1,18 @@
+% Installation:
+% 1. install pdflatex
+% 2. install lhs2TeX
+
+% Compilation:
+% lhs2TeX master.lhs > master.tex && pdflatex master
+
 \documentclass{amsart}
 \usepackage{tikz}
+
+%include lhs2TeX.fmt
+%lang haskell
+%format pattern = "\mathbf{pattern}"
+
+
 
 \gdef\R{\rightarrow}
 
@@ -96,258 +109,140 @@ This is the syntax tree of $3\times4+5$ in Chomsky normal form.
 \begin{tikzpicture}
 \path node{$N_1$}
 child { node{$N_3$}
-  child { node{$N_5$} child { node{$4$} } }
+  child { node{$N_5$} child { node{$3$} } }
   %child[draw opacity=0] {}
   child { node{$Q_3$}
     child { node{$\times$} }
-    child { node{$N_5$} child { node{$5$} } }
+    child { node{$N_5$} child { node{$4$} } }
   }
 }
 child[draw opacity=0] {}
 child { node{$P_1$}
   child { node{$+$} }
-  child { node{$N_5$} child { node{$2$} } }
+  child { node{$N_5$} child { node{$5$} } }
 };
 \end{tikzpicture}
 \]
 
-\section{Information flows by example}
 
-Each transformation between two grammars gives rise to a syntax
-tree transformation. We will describe syntax tree transformations
-by the information flow in the grammar transformation.
+\section{Grammar-datatype correspondence}
 
-\subsection{Concrete and abstract grammars for arithmetic expressions}
+Each context-free grammar can be considered as a family of
+mutually recursive datatypes. We interpret grammars as datatypes
+according to the following table.
 
-To describe information flows, we need a unique identifier for
-all terminals and nonterminals on the right-hand-side of a
-production rule. Let us index nonterminals by superscripts.
-
-This is the result of indexing the concrete grammar $C$.
-\begin{align*}
-C &\R C^1~+^2~S^3 & (C_1) \\
-C &\R S^4     & (C_2) \\
-S &\R S^5~\times^6~F^7 & (S_3) \\
-S &\R F^8     & (S_4) \\
-F &\R \mbox{integer}^9 & (F_5) \\
-F &\R (~C^{10}~) & (F_6)
-\end{align*}
-
-This is the result of indexing the abstract grammar $A$. We add
-a special trivial equation $A_0$, which corresponds to the
-productions $C_2,S_4,F_6$ that are removed in the abstract
-grammar. $A_0$ is not a real production; there are no $A_0$ nodes
-in abstract syntax trees.
-\begin{align*}
-A &= A^0       & (A_0) \\
-A &\R A^2~+^3~A^4 & (A_1) \\
-A &\R A^5~\times^7~A^8 & (A_3) \\
-A &\R \mbox{integer}^{10} & (A_5)
-\end{align*}
-
-Once nonterminals have unique identifiers, we can talk about
-information flow. Let us describe the transformation from
-concrete syntax trees to abstract syntax trees.
-\begin{itemize}
-\item $C_1$ nodes transform into $A_1$ nodes with information
-flowing from $C^1$ to $A^2$, from $+^2$ to $+^3$, and from $S^3$
-to $A^4$.
-\item $C_2$ nodes transform into unknown abstract nodes with
-information flowing from $S^4$ to $A^0$.
-\item $S_3$ nodes transform into $A_3$ nodes with information
-flowing from $S^5$ to $A^5$, from $\times^6$ to $\times^7$, and
-from $F^7$ to $A^8$.
-\item $S_4$ nodes transform into unknown abstract nodes with
-information flowing from $F^8$ to $A^0$.
-\item $F_5$ nodes transform into $A_5$ nodes with information
-flowing from $\mbox{integer}^9$ to $\mbox{integer}^{10}$.
-\item $F_6$ nodes transform into unknown abstract nodes with
-information flowing from $C^{10}$ to $A^0$.
-\end{itemize}
-
-\subsection{Chomsky normal form}
-
-This is the result of indexing the Chomsky normal form $N$ of the
-abstract grammar $A$.
-\begin{align*}
-N &\R N^1~P^2 & (N_1) \\
-N &\R N^3~Q^4 & (N_3) \\
-N &\R \mbox{integer}^5 & (N_5) \\
-P &\R +^6~N^7 & (P_1) \\
-Q &\R \times^8~N^9 & (Q_3)
-\end{align*}
-
-Let us describe the transformation from syntax trees of $A$ to
-syntax trees of $N$.
-\begin{itemize}
-\item $A_1$ nodes transform into $N_1$ nodes with information
-flowing from $A^2$ to $N^1$, from $+^3$ through $P^2$ to $+^6$,
-and from $A^4$ through $P^2$ to $N^7$.
-\item $A_3$ nodes transform into $N_3$ nodes with information
-flowing from $A^5$ to $N^3$, from $\times^7$ through $Q^4$ to
-$\times^8$, and from $A^8$ through $Q^4$ to $N^9$.
-\item $A_5$ nodes transform into $N_5$ nodes with information
-flowing from $\mbox{integer}^{10}$ to $\mbox{integer}^5$.
-\end{itemize}
-
-\section{Information flows, formally}
-
-An information flow between two context-free grammars can be
-considered a collection of rewrite rules. We will define it
-precisely here.
-
-An \textbf{indexed grammar} is a context-free grammar with the
-following changes:
-\begin{enumerate}
-\item Every occurrence of every symbol on right-hand-side of
-production rules receives a unique, identifying superscript.
-\item For each nonterminal $A$ in the grammar, add the equation
 \[
-A=A^0\qquad(A_0).
+\begin{tabular}{rcl}
+Grammar & is & family of mutually recursive datatypes \\
+Nonterminal symbol & is & datatype \\
+Terminal symbol & is & primitive type \\
+Production rule & is & data constructor \\
+String literal & is & singleton type \\
+Syntax tree & is & value of a datatype
+\end{tabular}
 \]
-\end{enumerate}
 
-From now on, we assume the existence of two indexed grammars, an
-\textbf{input} grammar and an \textbf{output} grammar.
+Following this schema, we translate the grammars to datatypes as
+follows.
 
-An \textbf{information path} is a sequence of symbols
-\[
-(S^m,\ldots,S^2,S^1,T^1,T^2,\ldots,T^n),
-\]
-such that
-\begin{enumerate}
-\item $S^m,\ldots,S^1$ are terminal or nonterminal symbols of the
-input grammar,
-\item $T^1,\ldots,T^n$ are terminal or nonterminal symbols of the
-output grammar,
-\end{enumerate}
-For example, in the transformation from the abstract grammar $A$
-to the grammar $N$ in Chomsky normal form, the information path
-from $+^3$ to $+^6$ is the sequence $(+^3,P^2,+^6)$.
+\gdef\PAR{\bigbreak\noindent}
 
-An \textbf{information flow} is a collection of flow fragments. A
-\textbf{flow fragment} is basically a rewrite rule between
-different languages. Formally, a flow fragment is a tuple
-$(Q,R,C)$, where
-\begin{enumerate}
-\item $Q$ is a production rule or equation in the input grammar,
-\item $R$ is a production rule or equation in the output grammar,
-\item $C$ is a collection of information paths.
-\end{enumerate}
+\PAR
+\begin{code}
+-- String literals
+data Add  =  Add  -- +
+data Mul  =  Mul  -- $\times$
+data LP   =  LP   -- (
+data RP   =  RP   -- )
+\end{code}
 
-This is the information flow from the concrete grammar $C$ to the
-abstract grammar $A$:
-\begin{align*}
-(C_1,A_1,&\{(C^1,A^1),(+^2,+^3),(S^3,A^4)\})\\
-(C_2,A_0,&\{(S^4,A^0)\})\\
-(S_3,A_3,&\{(S^5,A^5),(\times^6,\times^7),(F^7,A^8)\})\\
-(S_4,A_0,&\{(F^8,A^0)\})\\
-(F_5,A_5,&\{(\mbox{integer}^9,\mbox{integer}^{10})\})\\
-(F_6,A_0,&\{(C^{10},A^0)\})
-\end{align*}
+\PAR
+\begin{code}
+-- The concrete grammar $C$
 
-This is the information flow from the abstract grammar $A$ to the
-grammar $N$ in Chomsky normal form:
-\begin{align*}
-(A_1,N_1,&\{(A^2,N^1),(+^3,P^2,+^6),(A^4,P^2,N^7)\})\\
-(A_3,N_3,&\{(A^5,N^3),(\times^7,Q^4,\times^8),(A^8,Q^4,N^9)\})\\
-(A_5,N_5,&\{(\mbox{integer}^{10},\mbox{integer}^5)\})
-\end{align*}
+data C  =  C1 C Add S
+        |  C2 S
 
+data S  =  S3 S Mul F
+        |  S4 F
 
-\section{Well-formed and well-behaved information flows}
+data F  =  F5 Int
+        |  F6 LP C RP
+\end{code}
 
-This section describes the form an information flow must take in
-order to correspond to a syntax tree transformation. Intuitively,
-a well-behaved information flow describes a pattern-matching
-expression, a well-behaved flow fragment describes one case in
-the pattern-matching expression, and a well-behaved information
-path describes one variable in one case of the pattern-matching
-expression. Since variables are described by paths, they have
-exactly one binding occurrence and exactly one bound occurrence.
-In other words, case expresions described by information flows
-are necessarily linear.
+\PAR
+\begin{samepage}
+\begin{code}
+-- The abstract grammar $A$
 
-\bigbreak
+data A  =  A1 A Add A
+        |  A3 A Mul A
+        |  A5 Int
+\end{code}
+\end{samepage}
 
-$(S^m,\ldots,S^1,T^1,\ldots,T^n)$ is a \textbf{well-behaved
-information path} if
-\begin{itemize}
-\item for all $2\le i\le m$, the symbol of $S^{i-1}$ is the
-left-hand-side of the production rule containing $S^i$, and
-\item for all $n\ge j\ge 2$, the symbol of $T^{j-1}$ is the
-left-hand-side of the production rule containing $T^j$.
-\end{itemize}
+\PAR
+\begin{code}
+-- The grammar $N$ in Chomsky 2-normal form
 
-\bigbreak
+data N  =  N1 N P
+        |  N3 N Q
+        |  N5 Int
 
-$P$ is a \textbf{compatible set} of information paths if for any
-two information paths $(S^m,\ldots,S^1,T^1,\ldots,T^n)$ and
-$(U^h,\ldots,U^1,V^1,\ldots,V^k)$ in $P$,
-\begin{itemize}
-\item there exists $i,j$ such that $S^i\neq U^i$ and $T^j\neq
-V^j$,
-\item if $S^i=U^i$ for all $i<x$, then $S^x$ and $U^x$ occurs in
-the same production,
-\item if $T^j=V^j$ for all $j<y$, then $T^y$ and $V^y$ occurs in
-the same production.
-\end{itemize}
+data P  =  P1 Add N
 
-\bigbreak
+data Q  =  Q3 Mul N
+\end{code}
 
-$(Q,R,C)$ is a \textbf{well-behaved flow fragment} if
-\begin{itemize}
-\item $C$ is a compatible set of well-behaved information paths,
-\item for each $(S^m,\ldots,S^1,T^1,\ldots,T^n)$ in $C$,
-\begin{itemize}
-\item $S^1$ occurs on the right-hand-side of the production $Q$,
-\item $T^1$ occurs on the right-hand-side of the production $R$.
-\end{itemize}
-\end{itemize}
+\PAR
+\begin{code}
+-- Syntax trees of $3\times4+5$ in grammars $C$, $A$ and $N$
 
-\bigbreak
+ec  ::  C
+ec  =   C1  (C2 (S3 (S4 (F5 3)) Mul (F5 4)))
+            Add
+            (S4 (F5 5))
 
-A \textbf{well-behaved information flow} consists of well-behaved
-flow fragments. The \textbf{inverse} of an information flow is
-obtained by reversing each information path and swapping the
-input and output symbols of each flow fragment.
+ea  ::  A
+ea  =   A1 (A3 (A5 3) Mul (A5 4)) Add (A5 5)
 
-\begin{lemma}
-The inverse of a well-behaved information flow is well-behaved.
-\end{lemma}
+en  ::  N
+en  =   N1 (N3 (N5 4) (Q3 Mul (N5 5))) (P1 Add (N5 2))
+\end{code}
 
 
+\section{Pattern synonyms}
 
-\section{Tree patterns and pattern-matching}
+We use \emph{pattern synonyms} to describe information flows between
+grammar transformations. A pattern synonym has a left-hand-side and
+a right-hand-side, both are patterns in Haskell's pattern-matching.
 
-Pattern matching seems easier to describe than information flows.
-Consider describing syntax tree transformations by case
-expressions instead of information flows.
+We require pattern synonyms be \emph{linear}, in that each variable
+occurs exactly once on the left-hand-side and exactly once on the
+right-hand-side of a pattern synonyms.
+Linear pattern synonyms are \emph{invertible}. To invert a pattern
+synonym, we swap its left-hand-side with its right-hand-side.
+
+We require type annotation on patterns whose type cannot be inferred.
+
+\PAR These are pattern synonyms of the transformation between $C$
+and $A$:
+
+< pattern C1 x Add y  =  A1 x Add y
+< pattern C2 x        =  x :: A
+< pattern S3 x Mul y  =  A3 x Mul y
+< pattern S4 x        =  x :: A
+< pattern F5 n        =  A5 n
+< pattern F6 LP x RP  =  x :: A
+
+\PAR These are pattern synonyms of the transformation between $A$
+and $N$:
+
+< pattern A1 x Add y  =  N1 x (P1 Add y)
+< pattern A3 x Mul y  =  N3 x (Q3 Mul y)
+< pattern A5 n        =  N5 n
 
 
-
-\section{Information flows as dialgebras}
-
-From a well-formed and well-behaved information flow, we generate
-a syntax tree transformation in 3 steps.
-\begin{enumerate}
-\item View the input grammar as the fixed point $\mu F$ of an
-$n$-nary higher-order functor $F$. View the output grammar as the
-fixed point $\mu G$ of an $n$-nary higher-order functor $G$.
-\item Compile the information flow into an $F,G$-dialgebra of
-type $F~\alpha\R G~\alpha$, where $\alpha$ can be either $\mu F$
-or $\mu G$. Instantiating $\alpha$ to $\mu G$ produces the
-$F$-algebra
-\[
-f : F~(\mu G) \R \mu G.
-\]
-Instantiating $\alpha$ to $\mu F$ produces the $G$-coalgebra
-\[
-g : \mu F \R G~(\mu F).
-\]
-\item The desired syntax tree transformation is given by the
-catamorphism with respect to the $F$-algebra $f$. It is at the
-same time the anamorphism with respect to the $G$-coalgebra $g$.
-\end{enumerate}
+\section{From pattern synonyms to syntax tree transformations}
 
 \end{document}

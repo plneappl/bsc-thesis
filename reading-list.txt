@@ -1,5 +1,9 @@
-Lämmel, Lohmann.
+Wang, Gibbons, Matsuda, Hu.
+Translucent abstraction: sasfe views through invertible programming
+
+Lämmel &c.
 Format evolution.
+Grammar adaptation.
 
 Erwig.
 Comprehending ADTs.

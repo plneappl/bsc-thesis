@@ -1,40 +1,41 @@
-
 import java.util.regex.Pattern
 
 object Transform {
+	
 	//TransformationRules are 1. a Pattern matching a rule to be transformed 2. output patterns, that create rules.
-	type TransformationRule = (String, List[String])
+	case class TransformationRule(fromPattern: String, toPatterns: List[String])
 	//A Transformation Object is a regex for pattern matching, format strings for outputting new rules,
 	//and the number of new Nonterminals beeing introduced.
-	type TransformationObject = (String, List[String], Int)
+	case class TransformationObject(fromRegex: String, toFStrings: List[String], newNTsCount: Int)
 	//TokenIndices is a Map mapping Nonterminals to their first appearance in a pattern
 	//therefore "A -> BDC" will make a map like Map(A -> 1, B -> 2, D -> 3, C -> 4)
 	type TokenIndices = Map[String, Int]
 	//This is a rule to be transformed; we want to factor out the 'B'
 	val in: String = "A -> BC | BD"
+	
 	//Transformation rules see everything separated by spaces as tokens. Nonterminals are anything starting with a capital letter.
 	//New nonterminals may be introduced simply by using them, the next lexicographically available nt will be used.
-	val factor: TransformationRule = ("N1 -> N2 N3 | N2 N4", List("N1 -> N2 N5", "N5 -> N3 | N4"))
+	val factor = TransformationRule("N1 -> N2 N3 | N2 N4", List("N1 -> N2 N5", "N5 -> N3 | N4"))
 	//Output shoud be: A -> B B'; B' -> C | D
 
 	//buildTransformationRules takes a TransformationRule and a grammatical rule
-	def buildTransformationRules(transformationRule: TransformationRule)(rule: String):TransformationObject = {
+	def buildTransformationRule(transformationRule: TransformationRule)(rule: String):TransformationObject = {
 		//build the in-pattern-matchers
-		var (inRegex, knownTokens) = buildInRegex(transformationRule._1)
+		var (inRegex, knownTokens) = buildInRegex(transformationRule.fromPattern)
 
 		var knownTokensCount = knownTokens.size
 		var result = List[String]()
 
 		//build the out-patterns
-		for(outRule <- transformationRule._2){
-			val (outFString, knownTokens2) = buildOutFormatString(knownTokens)(outRule)
+		for(toPattern <- transformationRule.toPatterns){
+			val (outFString, knownTokens2) = buildOutFormatString(knownTokens)(toPattern)
 			//update known nonterminals
 			knownTokens = knownTokens2
 			result = result :+ outFString
 		}
 		//tokens introduced by the out-patterns
 		var newTokensCount = knownTokens.size - knownTokensCount 
-		(inRegex, result, newTokensCount)
+		TransformationObject(inRegex, result, newTokensCount)
 	}
 
 	//increment on Strings over {\epsilon, A, B, C, ..., Z}
@@ -64,20 +65,18 @@ object Transform {
 	}
 
 	//transform a grammar rule
-	def applyTransformationRules(to: TransformationObject)(in: String): List[String] = {
+	def applyTransformationRule(tfo: TransformationObject)(in: String): List[String] = {
 		var result = List[String]()
 		println()
-		println("Pattern: " + to._1)
+		println("Pattern: " + tfo.fromRegex)
 		println("Trying to match: " + in)
 
-		var numberOfNewNonterminals = to._3
-
 		//this is the "complicated" part: finding out how to get a list of matches
-		var vars = to._1.r.findFirstMatchIn(in).get.subgroups
+		var vars = tfo.fromRegex.r.findFirstMatchIn(in).get.subgroups
 
 		//add new nonterminals, starting at "A"
 		var nextNonterminal = "A"
-		for(i <- 0 until numberOfNewNonterminals){
+		for(i <- 0 until tfo.newNTsCount){
 			//just try the next lexicographical one until it's a new one
 			while(vars.contains(nextNonterminal)) {
 				nextNonterminal = nextLexicographic(nextNonterminal)
@@ -87,8 +86,8 @@ object Transform {
 		
 		println("Vars: " + vars)	
 
-		to._2.foreach(println)
-		to._2.foreach(x => {
+		tfo.toFStrings.foreach(println)
+		tfo.toFStrings.foreach(x => {
 			//apply the format strings to get the transformed rules
 			result = result :+ x.format(vars:_*) 
 		})
@@ -145,7 +144,7 @@ object Transform {
 						subExprCount += 1
 						
 						//difference: first occurences of nonterminals are used to parse them, later ones will get backreferenced
-						result += "([A-Z])\\s*"
+						result += "([A-Z][a-z]*)\\s*"
 					}
 					else {
 						//backreference 
@@ -161,20 +160,34 @@ object Transform {
 		(result, known)
 	}
 
+	trait InformationPath
+	case class Rename(from:(String, Int), to:(String, Int)) extends InformationPath
+	case class Create(from:(String, Int), to:((String, Int, Int), (String, Int))) extends InformationPath
+	case class Delete(from:(String, Int), to:String) extends InformationPath
+	case class ProductionRuleIdentifier(nonterminal: String, index: Int)
+	case class ProductionRuleTransform(from: ProductionRuleIdentifier, to: ProductionRuleIdentifier)
+	case class FlowFragment(transform: ProductionRuleTransform, informationPaths: List[InformationPath])
+	type InformationFlow = List[FlowFragment]
+
 	//wrapper for easier use
-	def transformGrammar(factor: TransformationRule)(in: String) = {
-		var to = buildTransformationRules(factor)(in)
-		applyTransformationRules(to)(in)
+	def transformGrammarRule(factor: TransformationRule)(in: String): (List[String], InformationFlow) = {
+		var to = buildTransformationRule(factor)(in)
+		(applyTransformationRule(to)(in), List(
+			FlowFragment(ProductionRuleTransform(ProductionRuleIdentifier("A", 1), ProductionRuleIdentifier("A", 1)), List(Rename(("B", 1), ("B", 1)), Create(("C", 2), (("E", 2, 2), ("C", 3))))),
+			FlowFragment(ProductionRuleTransform(ProductionRuleIdentifier("A", 2), ProductionRuleIdentifier("A", 1)), List(Rename(("B", 3), ("B", 1)), Create(("D", 4), (("E", 3, 2), ("D", 4)))))
+			)
+		)
+		
 	}
+	
 
 	def main(args: Array[String]): Unit = {
-		var transformed = transformGrammar(factor)(in)
+		var transformed = transformGrammarRule(factor)(in)
 		println()
 		println("In: ")
 		println(in)
 		println()
 		println("Transformed: ")
-		transformed.foreach(println)
-		println()
+		println(transformed)
 	}
 }

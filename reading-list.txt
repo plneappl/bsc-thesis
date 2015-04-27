@@ -4,6 +4,8 @@ Translucent abstraction: sasfe views through invertible programming
 Lämmel &c.
 Format evolution.
 Grammar adaptation.
+Framework for datatype transformation.
+Typed generic traversal with term rewriting strategies.
 
 Erwig.
 Comprehending ADTs.

@@ -1,3 +1,6 @@
+Martins, Saraiva, Fernandes, Wyk.
+Generating attribute grammar-based bidirectional transformations from rewrite rules.
+
 Matsuda, Wang.
 FliPpr: a prettier invertible printing system.
 

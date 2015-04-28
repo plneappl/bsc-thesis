@@ -33,7 +33,7 @@
 
 \null
 \vskip 3cm plus 1cm
-\title{Syntax tree transformation as dialgebraic fold}
+\title{Pattern synonyms describe syntax tree transformations}
 \maketitle
 \vskip 3cm plus 1cm
 

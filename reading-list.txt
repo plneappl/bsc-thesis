@@ -1,5 +1,8 @@
+Matsuda, Wang.
+FliPpr: a prettier invertible printing system.
+
 Wang, Gibbons, Matsuda, Hu.
-Translucent abstraction: safe views through invertible programming
+Translucent abstraction: safe views through invertible programming.
 
 Lämmel &c.
 Format evolution.

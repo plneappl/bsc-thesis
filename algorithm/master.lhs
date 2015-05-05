@@ -497,12 +497,7 @@ data V   =  V7 String
 \end{code}
 
 The desugaring transformation operates as follows. Note that some
-recursive call to |desugar| is not structurally recursive. However,
-it is provably terminating in Agda's termination checker, which
-is based on the termination checker in Abel's Foetus. The idea is
-to use Abel's termination checking to compile terminating recursive
-functions into folds with respect to dialgebras, which is then
-invertible.
+recursive call to |desugar| is not structurally recursive.
 
 \begin{code}
 desugar :: G -> G'
@@ -510,5 +505,14 @@ desugar (G1 (D3 t (U5 v u)) g)  =  G1' (D3' t v) (desugar (G1 (D3 t u) g))
 desugar (G1 (D3 t (U6 v)) g)    =  G1' (D3' t v) (desugar g)
 desugar G2                      =  G2'
 \end{code}
+
+Non-structural-recursion are expressed by \emph{recursive} pattern
+synonyms, where constructors on left-hand-side may occur on
+right-hand-side. This is the recursive pattern synonym from |G|
+to |G'|:
+
+< pattern G1 (D3 t (U5 v u)) g  =  G1' (D3' t v) (G1 (D3 t u) g)
+< pattern G1 (D3 t (U6 v)) g    =  G1' (D3' t v) g
+< pattern G2                    =  G2'
 
 \end{document}

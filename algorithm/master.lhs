@@ -449,4 +449,66 @@ unifier $\sigma$ of $p,q$ to also unify the right-hand-side
 of the pattern synonyms where $p$ and $q$ occur.
 
 
+\section{Nonlinear patterns}
+
+Consider desugaring |int a, b, c;| into |int a; int b; int c;|.
+
+The sugared grammar $G$ describes declaration sequences with
+lists of names.
+\begin{align*}
+G & \R D~G & (G_1)\\
+G & \R \epsilon & (G_2)\\
+D & \R T~U~; & (D_3)\\
+U & \R V~,~U & (U_4)\\
+U & \R V & (U_5)\\
+T & \R \mbox{string} & (T_5) \\
+V & \R \mbox{string} & (V_6)
+\end{align*}
+
+The desugared grammar $G'$ describes sequences of declarations
+with one name.
+\begin{align*}
+G' & \R D'~G' & (G_1')\\
+G' & \R \epsilon & (G_2')\\
+D' & \R T~V~; & (D_3')\\
+\end{align*}
+
+Let us convert $G$ and $G'$ into datatypes. For simplicity, we
+leave out the singleton types for the semicolon and comma string
+literals.
+
+\begin{code}
+data G   =  G1 D G
+         |  G2
+
+data G'  =  G1' D' G'
+         |  G2'
+
+data D   =  D3 T U
+
+data D'  =  D3' T V
+
+data T   =  T4 String
+
+data U   =  U5 V U
+         |  U6 V
+
+data V   =  V7 String
+\end{code}
+
+The desugaring transformation operates as follows. Note that some
+recursive call to |desugar| is not structurally recursive. However,
+it is provably terminating in Agda's termination checker, which
+is based on the termination checker in Abel's Foetus. The idea is
+to use Abel's termination checking to compile terminating recursive
+functions into folds with respect to dialgebras, which is then
+invertible.
+
+\begin{code}
+desugar :: G -> G'
+desugar (G1 (D3 t (U5 v u)) g)  =  G1' (D3' t v) (desugar (G1 (D3 t u) g))
+desugar (G1 (D3 t (U6 v)) g)    =  G1' (D3' t v) (desugar g)
+desugar G2                      =  G2'
+\end{code}
+
 \end{document}

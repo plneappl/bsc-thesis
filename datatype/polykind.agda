@@ -1,4 +1,7 @@
 -- experimenting with nonprimitive recursion
+-- desugaring `int a b c;` into `int a; int b; int c;`
+-- G  = sugared grammar
+-- G′ = desugared grammar
 
 open import Data.String
 
@@ -38,3 +41,14 @@ desugar : G → G′
 desugar (G₁ (D₃ t (U₅ v u)) g) = G₁′ (D₃′ t v) (desugar (G₁ (D₃ t u) g))
 desugar (G₁ (D₃ t (U₆ v)) g)   = G₁′ (D₃′ t v) (desugar g)
 desugar G₂                     = G₂′
+
+-- even as we can obtain `desugar` by inlining the first recursive call of
+-- `desugar′`, the termination checker accepts `desugar` and rejects `desugar′`
+{-# NON_TERMINATING #-}
+desugar′ : G → G′
+desugar′ (G₁ (D₃ t (U₅ v u)) g) = desugar′ (G₁ (D₃ t (U₆ v)) (G₁ (D₃ t u) g))
+desugar′ (G₁ (D₃ t (U₆ v)) g)   = G₁′ (D₃′ t v) (desugar′ g)
+desugar′ G₂                     = G₂′
+
+-- primitive recursion	vs	general recursion
+-- regular datatypes	vs	higher-kinded datatypes

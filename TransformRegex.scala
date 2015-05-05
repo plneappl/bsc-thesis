@@ -1,6 +1,6 @@
 import java.util.regex.Pattern
 
-object Transform {
+object TransformRegex {
 	
 	//TransformationRules are 1. a Pattern matching a rule to be transformed 2. output patterns, that create rules.
 	case class TransformationRule(fromPattern: String, toPatterns: List[String])

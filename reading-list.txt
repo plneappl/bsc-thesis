@@ -1,11 +1,22 @@
+Voigtländer
+Bidirectionalization for free! (Pearl)
+-- I think free theorem implies that the argument of `bff`
+-- can only be toList, which means `bff` may as well
+-- call itself `fromListWithDefault`.
+bff : (Traversable κ) ⇒
+      (∀α. κ α → [α]) →
+      (∀α. Eq α ⇒ κ α → [α] → κ α)
+
 Martins, Saraiva, Fernandes, Wyk.
 Generating attribute grammar-based bidirectional transformations from rewrite rules.
 
 Matsuda, Wang.
 FliPpr: a prettier invertible printing system.
+"Bidirectionalization for free" for monomorphic transformations
 
 Wang, Gibbons, Matsuda, Hu.
 Translucent abstraction: safe views through invertible programming.
+Refactoring pattern matching.
 
 Lämmel &c.
 Format evolution.

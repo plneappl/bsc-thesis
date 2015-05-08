@@ -104,19 +104,23 @@ Following the grammar-datatype correspondance schema in
 \cref{gdc}, we transform the grammar into datatypes |S| and |F|.
 The syntax trees of left-associative sums are exactly the values
 of |S|.
+
 \begin{code}
 data S  =  S_1 S Plus F
         |  S_2 F
 
 data F  =  F_3 Int
+
+data Plus = Plus -- the terminal symbol +
 \end{code}
+
 The datatype declaration fully describes the language of
 left-associative sums, which is an LL(1) language. The user
 should be able to ``derive'' an LL(1) parser simply by requesting
 it in the datatype declarations.
+
 \begin{code}
 data S  =  S_1 S Plus F  |  S_2 F  {--}  deriving LL1
-
 data F  =  F_3 Int                 {--}  deriving LL1
 \end{code}
 

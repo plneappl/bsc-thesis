@@ -511,8 +511,17 @@ synonyms, where constructors on left-hand-side may occur on
 right-hand-side. This is the recursive pattern synonym from |G|
 to |G'|:
 
+
 < pattern G1 (D3 t (U5 v u)) g  =  G1' (D3' t v) (G1 (D3 t u) g)
 < pattern G1 (D3 t (U6 v)) g    =  G1' (D3' t v) g
 < pattern G2                    =  G2'
+
+
+\section{Meaning of recursive pattern synonyms}
+
+
+\section{Metatheory of recursive pattern synonyms}
+
+Just how partial are those things? In which sense are they bidirectional?
 
 \end{document}

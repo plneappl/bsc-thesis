@@ -52,7 +52,7 @@
 
 \title{Datatypes as Language Descriptions:
 Bidirectional Grammar/Datatype Transformation
-With Recursive Pattern Synonyms}
+Through Recursive Pattern Synonyms}
 
 
 \authorinfo{One\and Two\and Three}

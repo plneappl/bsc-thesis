@@ -1,0 +1,12 @@
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+master.bbl
+master.blg
+*.rel
+master.out
+master.toc
+master.ptb
+master.tex
+DirtyWork.tex

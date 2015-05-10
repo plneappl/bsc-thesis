@@ -5,7 +5,15 @@ object Transform {
 	case class Terminal(sym: String) extends GrammarAtom
 	case object IntegerTerminal extends GrammarAtom
 	
-	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom])
+	//todo: 
+	/*
+	- define syntax trees
+	- produce patterns (?)
+	- parse grammars (??)
+	- read papers
+	  - first one
+	*/
+	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int)
 	
 	case class Grammar(start: Nonterminal, rules: List[GrammarRule])
 	
@@ -21,59 +29,65 @@ object Transform {
 	
 	//concrete grammar
 	val rules1 = List(
-		GrammarRule(c, List(c, plus, s)),
-		GrammarRule(c, List(s)),
-		GrammarRule(s, List(s, mul, f)),
-		GrammarRule(s, List(f)),
-		GrammarRule(f, List(IntegerTerminal)),
-		GrammarRule(f, List(leftBrace, c, rightBrace))
+		GrammarRule(c, List(c, plus, s), 1),
+		GrammarRule(c, List(s), 2),
+		GrammarRule(s, List(s, mul, f), 3),
+		GrammarRule(s, List(f), 4),
+		GrammarRule(f, List(IntegerTerminal), 5),
+		GrammarRule(f, List(leftBrace, c, rightBrace), 6)
 		)
 	
 	val g1 = Grammar(c, rules1)
 	
 	//abstract grammar
 	val rules2 = List(
-		GrammarRule(a, List(a, plus, a)),
-		GrammarRule(a, List(a, mul, a)),
-		GrammarRule(a, List(IntegerTerminal))
+		GrammarRule(a, List(a, plus, a), 1),
+		GrammarRule(a, List(a, mul, a), 2),
+		GrammarRule(a, List(IntegerTerminal), 3)
 		)
 	val g2 = Grammar(a, rules2)
 	
-	trait TransformerAtom
-	case class NonterminalMatcher(id: Int) extends TransformerAtom
-	case class TerminalMatcher(matches: String) extends TransformerAtom
-	case object IntegerMatcher extends TransformerAtom
+	abstract class TransformerAtom{def tag: Int}
+	case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom
+	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom
+	case class IntegerMatcher(tag: Int) extends TransformerAtom
 	
 	type TransformerSequence = List[TransformerAtom] 
 	case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence)
 	case class TransformerRule(from: List[GrammarRuleMatcher], to: GrammarRuleMatcher)
 	type TransformerRules = List[TransformerRule]
+	case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules)
 	
 	//C to A: take C -> C + S, C -> S and produce A -> A + A
 	val transformCtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(1), List(NonterminalMatcher(1), TerminalMatcher("+"), NonterminalMatcher(2))),
-			GrammarRuleMatcher(NonterminalMatcher(1), List(NonterminalMatcher(2)))
+			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(1, 1), TerminalMatcher("+", 2), NonterminalMatcher(2, 3))),
+			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, -1)))
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0), List(NonterminalMatcher(0), TerminalMatcher("+"), NonterminalMatcher(0)))
+		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("+", 2), NonterminalMatcher(0, 3)))
 	)
 	
 	//S to A: take S -> S * F, S -> F and produce A -> A * A
+	//S0 -> S * F = A -> A * A
+	//S1 -> F     = A -> A * A
+	// 2 -> S, 3 -> F, 0 -> A
+	//S -> A 
 	val transformStoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(2), List(NonterminalMatcher(2), TerminalMatcher("*"), NonterminalMatcher(3))),
-			GrammarRuleMatcher(NonterminalMatcher(2), List(NonterminalMatcher(3)))
+			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(2, 1), TerminalMatcher("*", 2), NonterminalMatcher(3, 3))),
+			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, -1)))
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0), List(NonterminalMatcher(0), TerminalMatcher("*"), NonterminalMatcher(0)))
+		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("*", 2), NonterminalMatcher(0, 3)))
 	)
+
 	
 	//F to A: take F -> [ C ], F -> int and produce A -> int
 	val transformFtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(3), List(TerminalMatcher("["), NonterminalMatcher(1), TerminalMatcher("]"))),
-			GrammarRuleMatcher(NonterminalMatcher(3), List(IntegerMatcher))	
+			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(TerminalMatcher("[", -1), NonterminalMatcher(1, -1), TerminalMatcher("]", -1))),
+			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(IntegerMatcher(1)))	
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0), List(IntegerMatcher))
+		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(IntegerMatcher(1)))
 	)
 	
 	//NonterminalMatchers can identify themselves with any symbol, this stores the identification while transforming
@@ -89,9 +103,9 @@ object Transform {
 	def matches(st: SymbolTable, grammarRule: GrammarRule, matcher: GrammarRuleMatcher): Option[SymbolTable] = if(grammarRule.rhs.size == matcher.rhs.size) try {
 		var symbolTable = checkSymbolTable(st, grammarRule.lhs.sym, matcher.lhs.id)
 		for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) (ga, ma) match {
-			case (Nonterminal(sym), NonterminalMatcher(id)) => symbolTable = checkSymbolTable(st, sym, id)
-			case (Terminal(str1), TerminalMatcher(str2)) if (str1 == str2)	=> {}
-			case (IntegerTerminal, IntegerMatcher) => {}
+			case (Nonterminal(sym), NonterminalMatcher(id, _)) => symbolTable = checkSymbolTable(st, sym, id)
+			case (Terminal(str1), TerminalMatcher(str2, _)) if (str1 == str2)	=> {}
+			case (IntegerTerminal, IntegerMatcher(_)) => {}
 			case _ => return None
 		}
 		Some(symbolTable)
@@ -134,18 +148,18 @@ object Transform {
 		}
 		rhs = rhs.reverse
 		
-		(st2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs))
+		(st2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs, -1))
 	}
 	
 	//produce a GrammarAtom from a TransformerAtom by looking up in the SymbolTable and adding new IDs
 	def applyMatcher(st: SymbolTable, a: TransformerAtom): (SymbolTable, GrammarAtom) ={
 		 a match {
-			case NonterminalMatcher(id) => {
+			case NonterminalMatcher(id, _) => {
 				val st2 = extendSymbolTable(st, id)
 				(st2, Nonterminal(st2(id)))
 			}
-			case TerminalMatcher(str) => (st, Terminal(str))
-			case IntegerMatcher => (st, IntegerTerminal)
+			case TerminalMatcher(str, _) => (st, Terminal(str))
+			case IntegerMatcher(_) => (st, IntegerTerminal)
 		}
 	}
 	
@@ -186,14 +200,16 @@ object Transform {
 	}
 	
 	//to transform a Grammar, we take every transformRule and apply it, meanwhile updating the SymbolTable
-	def transformGrammar(transformerRules: TransformerRules)(grammar: Grammar): Grammar = {
+	def transformGrammar(transformer: GrammarTransformer)(grammar: Grammar): Grammar = {
 		var outRules = List[GrammarRule]()
 		var symbolTable: SymbolTable = Map()
-		for(rule <- transformerRules) {
+		var i = 1
+		for(rule <- transformer.rules) {
 			applyRule(symbolTable, rule, grammar) match {
 				//if we were able to apply the rule, update our SymbolTable
-				case Some((nst, newRule)) => { 
-					outRules = newRule :: outRules 
+				case Some((nst, GrammarRule(lhs, rhs, _))) => { 
+					outRules = (GrammarRule(lhs, rhs, i)) :: outRules
+					i = i + 1 
 					symbolTable = nst
 				}
 				//we couldn't apply the rule, so we do nothing
@@ -201,11 +217,13 @@ object Transform {
 			}	
 		}
 		//How do we get the starting Nonterminal?
-		Grammar(Nonterminal('A), outRules)
+		Grammar(Nonterminal(symbolTable(transformer.start.id)), outRules)
 	}
+	
+	def concreteToAbstract = GrammarTransformer(NonterminalMatcher(0, 0), List(transformFtoA, transformCtoA, transformStoA))	
 	
 	def main(args: Array[String]) = {
 		println(g1)
-		println(transformGrammar(List(transformCtoA, transformFtoA, transformStoA))(g1))
+		println(transformGrammar(concreteToAbstract)(g1))
 	}
 }

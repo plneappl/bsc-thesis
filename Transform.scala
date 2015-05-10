@@ -227,10 +227,91 @@ object Transform {
 	case class LeafString(str: String) extends Leaf
 	case class LeafInteger(i: Int) extends Leaf
 	
+	type Parser[A] = String => Option[(A, String)]
+	def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
+		firstTry(input) orElse secondTry(input)
+  }
+    
+  def sequence[A, B](parseFirstPart: => Parser[A], parseSecondPart: => Parser[B]): Parser[(A, B)] =
+    input => parseFirstPart(input) match {
+      case Some((firstResult, afterFirstPart)) => parseSecondPart(afterFirstPart) match {
+          case Some((secondResult, afterSecondPart)) => Some( ((firstResult, secondResult), afterSecondPart) )
+          case None => None
+        }
+      case None => None
+    }
+    
+  def postprocess[A, B](parser: => Parser[A])(postprocessor: A => B): Parser[B] =
+    input => parser(input) match {
+      case Some( (result, rest) ) => Some( (postprocessor(result), rest) )
+      case None => None
+    }
+	implicit class ParserOps[A](self: => Parser[A]) {
+    def | (that: => Parser[A]): Parser[A] = choice(self, that)
+    def ~ [B] (that: => Parser[B]): Parser[(A, B)] = sequence(self, that)
+    def ^^ [B] (postprocessor: A => B): Parser[B] = postprocess(self)(postprocessor)
+  }
+  
+  def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduce((x, y) => x | y)
+  
+	def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
+    listToOption((grammar lookup nonterminal).map(parseRHS(_, grammar) ^^ {
+      children => Branch(nonterminal.sym, children)
+    }))
+  }
 	
+	def parseString(expected: String): Parser[String] = code => {
+    if (code startsWith expected) Some((expected, code drop expected.length))
+    else None
+  }
+  def parseRegex(regex: String): Parser[String] = code => {
+    val Pattern = s"($regex)(.*)".r
+    code match {
+      case Pattern(groups @ _*) => {
+      	Some((groups.head, groups.last))
+      }
+      case otherwise => {
+      	None
+      }
+    }
+  }
+  def keywordParser(keyword: String): Parser[SyntaxTree] = 
+    parseString(keyword) ^^ { x => LeafString(keyword) }
+  
+  def digitsParser: Parser[SyntaxTree] = 
+    parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
+  
+
+	
+	def parseRHS(ruleRHS: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = ruleRHS match {
+		case head :: tail => recurseParseRHS(head, tail, grammar)
+		case Nil => {_ => Some((List(), ""))}
+	}
+	
+	def recurseParseRHS(head: GrammarAtom, tail: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = { 
+		parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
+			case (t1, t2) => t1 :: t2
+		}
+	}
+	
+	def parseGrammarAtom(head: GrammarAtom, grammar: Grammar): Parser[SyntaxTree] = head match {
+				case nt: Nonterminal => parseNonterminal(nt, grammar)
+				case Terminal(str) => keywordParser(str)
+				case IntegerTerminal => digitsParser
+			}
+			
+	def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
+		var parser = parseNonterminal(g.start, g)
+    parser(str) match {
+      case Some((t, rest)) if (rest == "") => t
+      case None => sys.error("Not an Expression: " + str)
+
+    }
+  }
 		
 	def main(args: Array[String]) = {
 		println(g1)
 		println(transformGrammar(concreteToAbstract)(g1))
+		println(parseWithGrammar(g1)("5"))
 	}
 }

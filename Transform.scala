@@ -7,15 +7,13 @@ object Transform {
 	
 	//todo: 
 	/*
-	- define syntax trees
 	- produce patterns (?)
-	- parse grammars (??)
-	- read papers
-	  - first one
 	*/
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int)
 	
-	case class Grammar(start: Nonterminal, rules: List[GrammarRule])
+	case class Grammar(start: Nonterminal, rules: List[GrammarRule]){
+		def lookup(nonterminal: Nonterminal): List[List[GrammarAtom]] = rules.filter({gr => gr.lhs.sym == nonterminal.sym}).map(r => r.rhs)
+	}
 	
 	val c = Nonterminal('C)
 	val a = Nonterminal('A)
@@ -29,9 +27,9 @@ object Transform {
 	
 	//concrete grammar
 	val rules1 = List(
-		GrammarRule(c, List(c, plus, s), 1),
+		GrammarRule(c, List(s, plus, c), 1),
 		GrammarRule(c, List(s), 2),
-		GrammarRule(s, List(s, mul, f), 3),
+		GrammarRule(s, List(f, mul, s), 3),
 		GrammarRule(s, List(f), 4),
 		GrammarRule(f, List(IntegerTerminal), 5),
 		GrammarRule(f, List(leftBrace, c, rightBrace), 6)
@@ -222,6 +220,15 @@ object Transform {
 	
 	def concreteToAbstract = GrammarTransformer(NonterminalMatcher(0, 0), List(transformFtoA, transformCtoA, transformStoA))	
 	
+	
+	trait SyntaxTree
+	case class Branch(nt: Symbol, childs: List[SyntaxTree]) extends SyntaxTree
+	trait Leaf extends SyntaxTree
+	case class LeafString(str: String) extends Leaf
+	case class LeafInteger(i: Int) extends Leaf
+	
+	
+		
 	def main(args: Array[String]) = {
 		println(g1)
 		println(transformGrammar(concreteToAbstract)(g1))

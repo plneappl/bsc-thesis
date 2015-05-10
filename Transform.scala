@@ -52,7 +52,7 @@ object Transform {
 	
 	type TransformerSequence = List[TransformerAtom] 
 	case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence)
-	case class TransformerRule(from: List[GrammarRuleMatcher], to: GrammarRuleMatcher)
+	case class TransformerRule(from: List[GrammarRuleMatcher], to: List[GrammarRuleMatcher])
 	type TransformerRules = List[TransformerRule]
 	case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules)
 	
@@ -62,7 +62,9 @@ object Transform {
 			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(1, 1), TerminalMatcher("+", 2), NonterminalMatcher(2, 3))),
 			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, -1)))
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("+", 2), NonterminalMatcher(0, 3)))
+		List(
+			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("+", 2), NonterminalMatcher(0, 3)))
+		)
 	)
 	
 	//S to A: take S -> S * F, S -> F and produce A -> A * A
@@ -75,7 +77,9 @@ object Transform {
 			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(2, 1), TerminalMatcher("*", 2), NonterminalMatcher(3, 3))),
 			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, -1)))
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("*", 2), NonterminalMatcher(0, 3)))
+		List(
+			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("*", 2), NonterminalMatcher(0, 3)))
+		)
 	)
 
 	
@@ -85,7 +89,9 @@ object Transform {
 			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(TerminalMatcher("[", -1), NonterminalMatcher(1, -1), TerminalMatcher("]", -1))),
 			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(IntegerMatcher(1)))	
 		),
-		GrammarRuleMatcher(NonterminalMatcher(0, 0), List(IntegerMatcher(1)))
+		List(
+			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(IntegerMatcher(1)))
+		)
 	)
 	
 	//NonterminalMatchers can identify themselves with any symbol, this stores the identification while transforming
@@ -112,7 +118,7 @@ object Transform {
 	
 
 	//try to match all 'from' rules, if success: produce a 'to' rule
-	def applyRule(st: SymbolTable, rules: TransformerRule, grammar: Grammar): Option[(SymbolTable, GrammarRule)] = {
+	def applyRule(st: SymbolTable, rules: TransformerRule, grammar: Grammar): Option[(SymbolTable, List[GrammarRule])] = {
 		var symbolTable = st
 
 		for(rule <- rules.from){
@@ -130,8 +136,16 @@ object Transform {
 			if(!matched) return None
 		}
 		
+		//produce the out rules
+		var out = List[GrammarRule]()
+		for(rule <- rules.to){
+			val (nst, r) = makeOutRule(symbolTable, rule)
+			symbolTable = nst
+			out = r :: out
+		}
 		//return a produced rule and the updated SymbolTable
-		Some(makeOutRule(symbolTable, rules.to))
+		Some(symbolTable, out)
+		
 	}
 	
 	//make a new rule by applying the TransformerAtoms one by one, steadily updating the SymbolTable in case a new Nonterminal is introduced
@@ -205,9 +219,11 @@ object Transform {
 		for(rule <- transformer.rules) {
 			applyRule(symbolTable, rule, grammar) match {
 				//if we were able to apply the rule, update our SymbolTable
-				case Some((nst, GrammarRule(lhs, rhs, _))) => { 
-					outRules = (GrammarRule(lhs, rhs, i)) :: outRules
-					i = i + 1 
+				case Some((nst, grammarRules)) => { 
+					for(GrammarRule(lhs, rhs, _) <- grammarRules){
+						outRules = (GrammarRule(lhs, rhs, i)) :: outRules
+						i = i + 1 
+					}
 					symbolTable = nst
 				}
 				//we couldn't apply the rule, so we do nothing

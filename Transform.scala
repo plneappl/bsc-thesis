@@ -59,7 +59,7 @@ object Transform {
 	//C to A: take C -> C + S, C -> S and produce A -> A + A
 	val transformCtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(1, 1), TerminalMatcher("+", 2), NonterminalMatcher(2, 3))),
+			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, 1), TerminalMatcher("+", 2), NonterminalMatcher(1, 3))),
 			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, -1)))
 		),
 		List(
@@ -68,13 +68,9 @@ object Transform {
 	)
 	
 	//S to A: take S -> S * F, S -> F and produce A -> A * A
-	//S0 -> S * F = A -> A * A
-	//S1 -> F     = A -> A * A
-	// 2 -> S, 3 -> F, 0 -> A
-	//S -> A 
 	val transformStoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(2, 1), TerminalMatcher("*", 2), NonterminalMatcher(3, 3))),
+			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, 1), TerminalMatcher("*", 2), NonterminalMatcher(2, 3))),
 			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, -1)))
 		),
 		List(
@@ -269,13 +265,7 @@ object Transform {
   }
   
   def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduce((x, y) => x | y)
-  
-	def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
-    listToOption((grammar lookup nonterminal).map(parseRHS(_, grammar) ^^ {
-      children => Branch(nonterminal.sym, children)
-    }))
-  }
-	
+  	
 	def parseString(expected: String): Parser[String] = code => {
     if (code startsWith expected) Some((expected, code drop expected.length))
     else None
@@ -297,11 +287,16 @@ object Transform {
   def digitsParser: Parser[SyntaxTree] = 
     parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
   
-
+  
+	def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
+    listToOption((grammar lookup nonterminal).map(parseRHS(_, grammar) ^^ {
+      children => Branch(nonterminal.sym, children)
+    }))
+  }
 	
 	def parseRHS(ruleRHS: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = ruleRHS match {
 		case head :: tail => recurseParseRHS(head, tail, grammar)
-		case Nil => {_ => Some((List(), ""))}
+		case Nil => {s => Some((Nil, s))}
 	}
 	
 	def recurseParseRHS(head: GrammarAtom, tail: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = { 
@@ -328,6 +323,6 @@ object Transform {
 	def main(args: Array[String]) = {
 		println(g1)
 		println(transformGrammar(concreteToAbstract)(g1))
-		println(parseWithGrammar(g1)("5"))
+		println(parseWithGrammar(g1)("5+6*6"))
 	}
 }

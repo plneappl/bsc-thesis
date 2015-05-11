@@ -49,7 +49,7 @@ open: master.pdf
 %.blg: %.aux %.bib
 	bibtex master $(REDIR)
 
-%.aux: %.tex
+%.aux: %.tex DirtyWork.tex
 	$(latex) master $(REDIR)
 
 master.aux:	DirtyWork.tex

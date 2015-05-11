@@ -41,7 +41,7 @@ subscripts =
   map (\n -> let s = show n in (s, s)) [0..9]
 
 subscribedNames :: [String]
-subscribedNames = ["A", "B", "F", "f", "field", "Record", "S", "T", "t"]
+subscribedNames = ["A", "B", "F", "f", "field", "Record", "R", "S", "T", "t"]
 
 formatKeyword :: String -> String
 formatKeyword x = "\"\\KEYWORD{" ++ x ++ "}\""
@@ -55,10 +55,11 @@ formatKeywords =
 
 formatSubscripts :: [String]
 formatSubscripts =
-  [ "%format " ++ x ++ "_" ++ lhs ++
-    " = \"\\ensuremath{" ++ x ++ "_{" ++ rhs ++ "}}\""
+  [ "%format " ++ x ++ "_" ++ lhs ++ postfix ++ 
+    " = \"\\ensuremath{" ++ x ++ "_{" ++ rhs ++ "}" ++ prime ++ "}\""
   | x <- subscribedNames
   , (lhs, rhs) <- subscripts
+  , (postfix, prime) <- [("", ""), ("prime", "^\\prime")]
   ]
 
 romanIfUpper :: String -> String

@@ -50,9 +50,9 @@
 %\titlebanner{banner above paper title}        % These are ignored unless
 %\preprintfooter{short description of paper}   % 'preprint' option specified.
 
-\title{Datatypes as Language Descriptions:
-Bidirectional Grammar/Datatype Transformation
-Through Recursive Pattern Synonyms}
+\title{Datatypes as Language Descriptions}
+\subtitle{Bidirectional Grammar/Datatype Transformation\\
+Via Recursive Pattern Synonyms with Functor Literals}
 
 
 \authorinfo{One\and Two\and Three}
@@ -78,21 +78,20 @@ rewrite rules
 
 \section{Introduction}
 
-Bacchus-Naur Form is the most prevalent format of describing
-context-free grammars. Algebraic datatypes are one of the most
-important feature in modern funcitonal programming languages. The
-syntax of Bacchus-Naur Form is almost identical to the
-declaration of mutually recursive regular datatypes. This
-document explores how far this connection can be exploited in
-language engineering. We envision a framework in which compilers
-and interpreters are written without neither parser generators
-nor parser combinators, where the datatype of syntax trees is
-sufficient description of the parser---\emph{and} the pretty
-printer.
+Bacchus-Naur Form is a popular format of describing context-free
+grammars. Algebraic datatypes are an important
+feature in modern funcitonal programming languages. The syntax of
+Bacchus-Naur Form is almost identical to the declaration of
+mutually recursive regular datatypes. This document explores how
+far this connection can be exploited in language engineering. We
+envision a framework in which compilers and interpreters are
+written with neither parser generators nor parser combinators,
+where the datatype of syntax trees is sufficient description of
+the parser---\emph{and} the pretty printer.
 
 Let us walk through the idea with a simple example:
-left-associatve sum expressions. This is the grammar with named
-production rules:
+left-associatve sum expressions. This is the grammar $S$ with
+named production rules:
 
 \begin{align*}
 S &::= S~+~F & (S_1)\\
@@ -101,9 +100,9 @@ F &::= \mbox{integer} &(F_3)
 \end{align*}
 
 Following the grammar-datatype correspondance schema in
-\cref{gdc}, we transform the grammar into datatypes |S| and |F|.
-The syntax trees of left-associative sums are exactly the values
-of |S|.
+\cref{gdc}, we transform the grammar $S$ into datatypes |S| and
+|F|. The syntax trees of left-associative sums are exactly the
+values of |S|.
 
 \begin{code}
 data S  =  S_1 S Plus F
@@ -119,15 +118,11 @@ left-associative sums, which is an LL(1) language. The user
 should be able to ``derive'' an LL(1) parser simply by requesting
 it in the datatype declarations.
 
-\begin{code}
-data S  =  S_1 S Plus F  |  S_2 F  {--}  deriving LL1
-data F  =  F_3 Int                 {--}  deriving LL1
-\end{code}
+< data S  =  S_1 S Plus F  |  S_2 F  {--}  deriving LL1
+< data F  =  F_3 Int                 {--}  deriving LL1
 
-\begin{code}
-expr = parseLL1 "1 + 2 + 3"
--- |S_1  (S_1 (S_2 (F_3 1)) Plus (S_2 (F_3 2))) Plus (S_2 (F_3 3))|
-\end{code}
+< expr = parseLL1 "1 + 2 + 3"
+< -- |S_1  (S_1 (S_2 (F_3 1)) Plus (S_2 (F_3 2))) Plus (S_2 (F_3 3))|
 
 
 \begin{figure}
@@ -182,6 +177,78 @@ The key to achieving this rosy vision is bidirectional
 grammar/datatype transformation. To see how it fits the picture,
 let us look again at the example of associative sums and think
 about the implementation of the |LL1|-derivation mechanism.
+Note that the grammar $S$ is left-recursive. In order to develop
+a LL(1) parse table for it, we must first eliminate left
+recursion by a textbook procedure to produce a grammar $S'$.
+
+\begin{align*}
+S' &::= F~R & (S_1')\\
+R  &::= +~F & (R_1)\\
+R  &::= \epsilon & (R_2)\\
+F  &::= \mbox{integer} & (F_3)
+\end{align*}
+
+Following \cref{gdc}, we can define new datatypes for the syntax
+trees of $S'$ and build an LL(1) parser to produce values of the
+datatype |S'|.
+
+\begin{code}
+data S'  =  S_1prime F R
+data R   =  R_1 Plus S'  |  R_2
+\end{code}
+
+However: The grammar $S'$ is created to appease the LL(1) parsing
+algorithm. To maintain the abstraction barrier, the derived LL(1)
+parser should produce the abstract syntax trees |S| instead. The
+missing link is the coercion from |S'| to |S|, without which
+left-recursion-elimination cannot be an automatic grammar
+transformation.
+
+We have seen how grammar transformations are important to support
+datatypes as language descriptions. Why, then, do we want
+\emph{bidirectional} grammar transformations? The reason is
+twofold: that we \emph{can} support it, and that it's useful
+sometimes.
+\begin{enumerate}
+\item \emph{Feasibility}: The grammar transformations are
+intended to be information-preserving in a weak sense; by parsing
+into a different grammar, we intend to stay true to the original
+grammar, neither creating nor eliminating information. A backward
+syntax tree transformation communicates our intention of
+information preservation.
+\item \emph{Utility}: Pretty-printing from abstract syntax tree
+is useful sometimes. Example use cases include the interpreter
+REPL and code generation in metaprogramming.
+\end{enumerate}
+
+
+
+\section{Our approach and its relation to existing solutions}
+
+The rough idea is to describe bidirectional syntax tree
+transformation by recursive pattern synonyms with functor
+literals, which are generated by grammar transformations acting
+on a particular grammar. Here comes a design question:
+\begin{quotation}
+Can one unify functors and pattern synonyms?
+\end{quotation}
+
+\noindent Here are some example usages.
+
+\medbreak
+< pattern S_1prime f_1 (F (S_2 f_2))  =  F (S_1 (S_2 f_1) f_2)
+<
+< functor F s  =  s @ (S_2 f)
+< functor F s  =  S_1 (F s) Plus f
+\medbreak
+
+\noindent Alternatively:
+
+\medbreak
+< pattern S_1prime f_1 r@(G f_2)  =  r@(F (S_1 (S_2 f_1) f_2))
+<
+< functor G f = F (S_2 f)
+\medbreak
 
 
 \cite{Lae01}

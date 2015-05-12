@@ -14,9 +14,20 @@
 % 11pt          To set in 11-point type instead of 9-point.
 % authoryear    To obtain author/year citation style instead of numeric.
 
-
 \usepackage{cleveref,pbox,amsmath,stmaryrd}
 \usepackage{caption,subcaption,float}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,decorations.markings}
+\tikzstyle{block} = [rectangle, draw,
+    text width=5em, text centered, rounded corners, minimum
+    height=4em]
+\tikzstyle{vecArrow} = [thick, decoration={markings,mark=at position
+   1 with {\arrow[thick]{open triangle 90}}},
+   double distance=3pt, shorten >= 4.5pt,
+   preaction = {decorate},
+   postaction = {draw,line width=3pt, white,shorten >= 2.5pt}]
+\tikzstyle{innerWhite} = [semithick, white,line width=3pt, shorten >= 4.5pt]
+
 
 % for "Bringert and Ranta [1]"
 \usepackage[numbers]{natbib}
@@ -76,7 +87,7 @@ Via Recursive Pattern Synonyms}
 \keywords Bidirectional transformations, pattern synonyms,
 rewrite rules
 
-\section{Introduction}
+\section{Introduction}\label{intro}
 
 Bacchus-Naur Form is a popular format of describing context-free
 grammars. Algebraic datatypes are an important
@@ -215,18 +226,145 @@ before printing it. Secondly, the backward transformation is used
 in the forward transformation sometimes [CROSSREF].
 
 
-\section{Our approach and its relation to existing solutions}
+\section{Our approach, built from existing solutions}
 
-The rough idea is to describe bidirectional syntax tree
-transformation by recursive pattern synonyms, which are generated
-by grammar transformations acting on a particular grammar.
+\Citeauthor{LaeFE} perceived that transformations at the grammar
+level induce transformations at the syntax tree level
+\citep{LaeFE,LaeGA}. To exploit the connection, they defined a
+collection of grammar-level operators, each of which induces an
+operator at the syntax-tree level. Grammar and syntax tree
+transformations are described at the same time by composing these
+operators. Their architecture is summarized in \cref{lae}; it is
+the starting point of our proposal.
 
-\medbreak
-< pattern S_1prime f_1 (S_1 s f_n)  =  S_1 (S_1prime f_1 s) f_n
-\medbreak
+One weakness in \citeauthor{LaeFE}'s architecture is the one-one
+correspondance between grammar transformations and syntax tree
+transformations. Under this framework, every grammar operator has
+to make sense as a syntax tree transformation for \emph{all
+possible grammars}. It is hard, if not impossible, to support a
+different syntax tree transformation for each input grammar.
+Left-recursion-elimination is one of the difficult cases. On
+grammars without left recursion, its syntax tree transformation
+is identity. On grammars with left recursion, its syntax tree
+transformation is \emph{not} the identity, even on trees that do
+not exhibit left recursion themselves. To support such
+transformations, we refine \citeauthor{LaeFE}'s architecture to
+associate each grammar transformation with a \emph{function} from
+grammars to syntax tree transformations, described by some
+intermediate language (\cref{arch}).
+
+\begin{figure}
+\centering
+\begin{tikzpicture}[y=1cm,x=2cm]
+\path
+(0,2)node [block] (ing) {input grammar}
+(2,2)node [block] (oug) {output grammar}
+(0,0)node [block] (int) {input syntax tree}
+(2,0)node [block] (out) {output syntax tree}
+;
+\draw[->](ing)--(oug)
+node[pos=.5,anchor=north](ada){``adaptation''}
+;
+\draw[->](int)--(out)
+node[pos=.5,anchor=south](mig){``migration''}
+;
+\draw[vecArrow](ada)--(mig);
+\end{tikzpicture}
+\caption{Grammar transformation architecture by
+\citeauthor{LaeFE} \citep{LaeFE,LaeGA}, with ``document type
+definition'' replaced by ``grammar'' and ``XML document''
+replaced by ``syntax tree''.}
+\label{lae}
+\end{figure}
+
+\begin{figure}
+\centering
+\begin{tikzpicture}[x=2cm,y=2cm]
+\tikzstyle{lang} = [block,draw=none,text width=7em]
+\path
+(0.0,1.5)node[block] (ing) {input grammar}
+(.95,2.5)node[lang]  (gtl) {grammar transformation language}
+(1,0,0.0)node[block] (int) {input syntax tree}
+(2.0,2.0)node[block] (oug) {output grammar}
+(2.0,1.0)node[lang]  (med) {intermediate language}
+(3.0,0.0)node[block] (out) {output syntax tree}
+;
+\draw[->](ing)--+(0:1.4)node[pos=1.0,anchor=south east](ada){``adaptation''}--(oug);
+\draw[->](ing)  +(0:1.4)--(med);
+\draw[vecArrow](gtl)--+(-90:0.7);
+\draw[vecArrow](med)--+(-90:0.6);
+%
+\draw[transform canvas={yshift=1mm},->](int)--(out)
+node[pos=.5,anchor=south](mig){``migration''};
+\draw[transform canvas={yshift=-1mm},->](out)--(int)
+node[pos=.5,anchor=north](mig){``repatriation''};
+\end{tikzpicture}
+\caption{Refined architecture of grammar and syntax tree
+transformations. We choose \emph{recursive pattern synonyms} as
+the intermediate language.}
+\label{arch}
+\end{figure}
+
+The choice of the intermediate language is a key design decision.
+It has to be powerful enough to support common and established
+grammar transformations in language engineering, it has to be
+regular enough to be generated automatically, and it has to be
+bidirectional enough to support backward syntax tree
+transformations. \emph{Recursive pattern synonyms} fulfills all 3
+conditions with the additional benefit of being intuitive to
+human programmers, who then retains the possibility to code in
+the intermediate language.
+
+Pattern synonyms are ``macro definitions'' for the patterns in
+pattern-matching. They were invented as a form of data
+abstraction for algebraic datatypes. For example, one may write a
+pattern synonym |Triple| to pattern-match on lists of 3 elements:
+
+< pattern Triple a b c = a : b : c : []
+
+Our interest is about \emph{recursive pattern synonyms}, or more
+precisely, nonlinear, nested, mutually-recursive pattern
+synonyms.
+\begin{itemize}
+\item \emph{Nonlinearity}: the same variable may occur multiple
+times on both sides of a pattern synonym.
+\item \emph{Nesting}: The pattern on left-hand-side of a synonym
+may contain multiple constructor names.
+\item \emph{Mutual-recursion}: Constructor names on
+left-hand-side of a synonym may occur on right-hand-side of
+the same or a different synonym. Vice versa for constructors on
+right-hand-side of synonyms. Constructors for different types may
+freely intermix.
+\end{itemize}
+Nonlinear, nested, mutually-recursive pattern synonyms are
+powerful enough to express highly nontrivial syntax tree
+transformations. For example, left-recursion-elimination on the
+grammar of left-associative sums are mostly captured by the
+following synonym (\cref{intro}):
+
+< pattern S_1prime f_1 (S_1 s Plus f_n)  =  S_1 (S_1prime f_1 s) Plus f_n
 
 
-\cite{Lae01}
+Pattern synonyms trace back to \emph{views} for datatypes
+[100CITATIONS].
+
+Pattern synonyms are closely related to rewrite rules. [Discuss
+Martins et al.]
+
+\section{Recursive pattern synonyms}
+
+\section{Semantics of recursive pattern synonyms}
+
+\section{Metatheory of recursive pattern synonyms}
+
+\section{Grammar transformation language}
+
+\section{Intermediate language generation}
+
+\section{Related work}
+
+\section{Conclusion}
+
 \bibliography{master}
 
 \end{document}

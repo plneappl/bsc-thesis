@@ -174,11 +174,12 @@ sums. With left-recursion-elimination as a component of the
 |LL1|-derivation mechanism, users need not carry out the process
 manually for each of their languages.
 
-\item Rapid deployment of parsing technologies: New technologies
-implemented for datatypes-as-language-descriptions have a low
-adoption overhead, because users can call them as a library
-instead of learning the technique and applying it to their
-language manually. Together with the widespread support of
+\item Rapid deployment of parsing technologies: Once a new
+technology (like mixfix parsing~\citep{Dan11}) is
+implemented for datatypes-as-language-descriptions, it enjoys a
+low adoption overhead. Instead of learning the technique and
+applying it to their language manually, users can invoke the
+tool in a library. Together with the widespread support of
 algebraic datatypes and the low learning curve, new technologies
 can quickly reach a large audience.
 \end{enumerate}
@@ -219,7 +220,7 @@ We will show the code of the coercion later
 We have seen how grammar transformations are important to support
 datatypes as language descriptions. Why, then, do we want
 \emph{bidirectional} grammar transformations? Firstly, the
-backward transformation is useful in pretty-printing: since the
+backward transformation is useful in pretty-printing: Since the
 concrete syntax tree is closer to the string syntax, it is easier
 to convert an abstract syntax tree to a concrete syntax tree
 before printing it. Secondly, the backward transformation is used
@@ -336,7 +337,7 @@ synonyms constitute a datatype of their own, called the
 \emph{view}. In the example above, |Triple| would be a
 constructor of a view on lists. There are bidirectional
 conversions between the original datatype and views, which are
-invoked every time one pattern-matches on the original datatype
+invoked every time the user pattern-matches on the original datatype
 with a view constructor. Our approach shares with \emph{views}
 the mental picture of pattern matching as bidirectional
 conversion, but our objective is the ``inverse'' of that of
@@ -386,7 +387,7 @@ destroys the closure property of inversion: Backward
 transformations have to be written in a language bigger than the
 language of forward transformations, and cannot be inverted again
 with the same technique. In this sense, recursive pattern
-synonyms are the natural \emph{closure} of \citeauthor{Martin}'s
+synonyms are the natural \emph{closure} of \citeauthor{Mar14}'s
 rewrite rules, gaining symmetry, robustness and conceptual
 transparency in the process.
 

@@ -63,7 +63,7 @@
 
 \title{Datatypes as Language Descriptions}
 \subtitle{Bidirectional Grammar/Datatype Transformation
-Via Recursive Pattern Synonyms}
+via Recursive Pattern Synonyms}
 
 
 \authorinfo{One\and Two\and Three}
@@ -228,6 +228,8 @@ in the forward transformation sometimes [CROSSREF].
 
 \section{Our approach, built from existing solutions}
 
+\subsection{Architecture and grammar adaptation}
+
 \Citeauthor{LaeFE} perceived that transformations at the grammar
 level induce transformations at the syntax tree level
 \citep{LaeFE,LaeGA}. To exploit the connection, they defined a
@@ -305,7 +307,10 @@ the intermediate language.}
 \label{arch}
 \end{figure}
 
-The choice of the intermediate language is a key design decision.
+\subsection{Pattern synonyms and views}\label{views}
+
+The choice of the intermediate language in \cref{arch}
+is a key design decision.
 It has to be powerful enough to support common and established
 grammar transformations in language engineering, it has to be
 regular enough to be generated automatically, and it has to be
@@ -321,6 +326,22 @@ abstraction for algebraic datatypes. For example, one may write a
 pattern synonym |Triple| to pattern-match on lists of 3 elements:
 
 < pattern Triple a b c = a : b : c : []
+
+
+There is a deep connection between pattern synonyms and
+\emph{views}~\citep{Wad87}. In fact, one may think of views as a
+way to implement of many kinds of pattern synonyms. From the
+\emph{views} perspective, constructors defined by pattern
+synonyms constitute a datatype of their own, called the
+\emph{view}. In the example above, |Triple| would be a
+constructor of a view on lists. There are bidirectional
+conversions between the original datatype and views, which are
+invoked every time one pattern-matches on the original datatype
+with a view constructor. Our approach shares with \emph{views}
+the mental picture of pattern matching as bidirectional
+conversion, but our objective is the ``inverse'' of that of
+views: Bidirectional conversions are our desired output, and we
+support them through pattern synonyms.
 
 Our interest is about \emph{recursive pattern synonyms}, or more
 precisely, nonlinear, nested, mutually-recursive pattern
@@ -344,20 +365,38 @@ following synonym (\cref{intro}):
 
 < pattern S_1prime f_1 (S_1 s Plus f_n)  =  S_1 (S_1prime f_1 s) Plus f_n
 
+\subsection{Pattern synonyms and rewrite rules}
 
-Pattern synonyms trace back to \emph{views} for datatypes
-[100CITATIONS].
+Pattern synonyms are closely related to rewrite
+rules~\citep{Lae03}. In the field of rewrite rules for attribute
+grammars, the work by \citet{Mar14} is closest to our idea of
+compiling pattern synonyms to syntax tree transformations. In
+\citeauthor{Mar14}'s system, syntax tree transformations are
+described by recursive rewrite rules, which can be inverted to
+generate the backward transformation. If we erase all occurrences
+of names of rewrite rule from \citeauthor{Mar14}'s system, then
+we essentially obtain recursive pattern synonyms, with one
+important restriction: The left-hand-side of these synonyms may
+only contain constructors of the source grammar. In particular,
+the synonym for left-recursion-elimination at the end of
+\cref{views} is forbidden. This restriction limits the
+expressiveness of syntax tree transformations, forbidding
+classical use cases like left-recursion elimination. Moreover, it
+destroys the closure property of inversion: Backward
+transformations have to be written in a language bigger than the
+language of forward transformations, and cannot be inverted again
+with the same technique. In this sense, recursive pattern
+synonyms are the natural \emph{closure} of \citeauthor{Martin}'s
+rewrite rules, gaining symmetry, robustness and conceptual
+transparency in the process.
 
-Pattern synonyms are closely related to rewrite rules. [Discuss
-Martins et al.]
+\section{Grammar transformation language}
 
 \section{Recursive pattern synonyms}
 
 \section{Semantics of recursive pattern synonyms}
 
 \section{Metatheory of recursive pattern synonyms}
-
-\section{Grammar transformation language}
 
 \section{Intermediate language generation}
 

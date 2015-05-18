@@ -1,6 +1,8 @@
 object Transform {
 	
-	trait GrammarAtom
+	import sext._
+	
+	sealed trait GrammarAtom
 	case class Nonterminal(sym: Symbol) extends GrammarAtom
 	case class Terminal(sym: String) extends GrammarAtom
 	case object IntegerTerminal extends GrammarAtom
@@ -10,8 +12,9 @@ object Transform {
 	- produce patterns (?)
 	*/
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int)
+	type GrammarRules = List[GrammarRule]
 	
-	case class Grammar(start: Nonterminal, rules: List[GrammarRule]){
+	case class Grammar(start: Nonterminal, rules: GrammarRules){
 		def lookup(nonterminal: Nonterminal): List[List[GrammarAtom]] = rules.filter({gr => gr.lhs.sym == nonterminal.sym}).map(r => r.rhs)
 	}
 	
@@ -23,7 +26,7 @@ object Transform {
 	val leftBrace  = Terminal("[")
 	val rightBrace = Terminal("]")
 	val plus       = Terminal("+")
-	val mul			   = Terminal("*")
+	val mul        = Terminal("*")
 	
 	//concrete grammar
 	val rules1 = List(
@@ -45,7 +48,7 @@ object Transform {
 		)
 	val g2 = Grammar(a, rules2)
 	
-	abstract class TransformerAtom{def tag: Int}
+	sealed abstract class TransformerAtom{def tag: Int}
 	case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom
 	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom
 	case class IntegerMatcher(tag: Int) extends TransformerAtom
@@ -114,9 +117,10 @@ object Transform {
 	
 
 	//try to match all 'from' rules, if success: produce a 'to' rule
-	def applyRule(st: SymbolTable, rules: TransformerRule, grammar: Grammar): Option[(SymbolTable, List[GrammarRule])] = {
+	def applyRule(st: SymbolTable, rules: TransformerRule, grammar: Grammar): Option[(List[GrammarRule], SymbolTable, List[GrammarRule])] = {
 		var symbolTable = st
-
+		var matchedRules = List[GrammarRule]()
+		
 		for(rule <- rules.from){
 			var matched = false
 			for(grammarRule <- grammar.rules){
@@ -124,6 +128,7 @@ object Transform {
 					case Some(nst) => {
 						symbolTable = nst
 						matched = true
+						matchedRules = grammarRule :: matchedRules
 					}
 					case None => {}
 				}
@@ -140,7 +145,7 @@ object Transform {
 			out = r :: out
 		}
 		//return a produced rule and the updated SymbolTable
-		Some(symbolTable, out)
+		Some(matchedRules, symbolTable, out)
 		
 	}
 	
@@ -208,36 +213,138 @@ object Transform {
 	}
 	
 	//to transform a Grammar, we take every transformRule and apply it, meanwhile updating the SymbolTable
-	def transformGrammar(transformer: GrammarTransformer)(grammar: Grammar): Grammar = {
+	def transformGrammar(transformer: GrammarTransformer)(grammar: Grammar): (Grammar, PatternSynonyms) = {
 		var outRules = List[GrammarRule]()
+		var patternSynonyms = List[PatternSynonym]()
 		var symbolTable: SymbolTable = Map()
 		var i = 1
 		for(rule <- transformer.rules) {
 			applyRule(symbolTable, rule, grammar) match {
 				//if we were able to apply the rule, update our SymbolTable
-				case Some((nst, grammarRules)) => { 
-					for(GrammarRule(lhs, rhs, _) <- grammarRules){
-						outRules = (GrammarRule(lhs, rhs, i)) :: outRules
-						i = i + 1 
-					}
+				case Some((matched, nst, grammarRules)) => { 
 					symbolTable = nst
+					val (newRules, i1) = tagGrammarRules(grammarRules, i)
+					i = i1
+					outRules = newRules ++ outRules
+					var patterns = producePatternSynonyms(rule, matched, newRules, symbolTable)
+					patternSynonyms = patternSynonyms ++ patterns
 				}
 				//we couldn't apply the rule, so we do nothing
 				case None => {}
 			}	
 		}
-		//How do we get the starting Nonterminal?
-		Grammar(Nonterminal(symbolTable(transformer.start.id)), outRules)
+		(Grammar(Nonterminal(symbolTable(transformer.start.id)), outRules), patternSynonyms)
+	}
+	
+	def tagGrammarRules(rules: List[GrammarRule], nextTag: Int): (List[GrammarRule], Int) = rules match {
+		case (GrammarRule(l, r, _)) :: rules2 => {
+			val (l1, i) = tagGrammarRules(rules2, nextTag + 1)
+			((GrammarRule(l, r, nextTag)) :: l1, i)
+		}
+		case Nil => (List[GrammarRule](), nextTag)
 	}
 	
 	def concreteToAbstract = GrammarTransformer(NonterminalMatcher(0, 0), List(transformFtoA, transformCtoA, transformStoA))	
 	
 	
-	trait SyntaxTree
+	sealed trait SyntaxTree
 	case class Branch(nt: Symbol, childs: List[SyntaxTree]) extends SyntaxTree
 	trait Leaf extends SyntaxTree
 	case class LeafString(str: String) extends Leaf
 	case class LeafInteger(i: Int) extends Leaf
+	
+	
+		
+	case class PatternSynonym(lhs: TypedPattern, rhs: TypedPattern){
+		override def toString = lhs.toString + " = " + rhs.toString
+	}
+	type PatternSynonyms = List[PatternSynonym]
+	sealed trait PatternAtom
+	case class TypedPatternVariable(id: Int, typ: Symbol) extends PatternAtom{
+		override def toString = "(" + id + " :: " + typ + ")"
+	}
+	case class PatternTerminal(str: String) extends PatternAtom{
+		override def toString = " " + str + " "
+	}
+	case class PatternInteger(id: Int) extends PatternAtom{
+		override def toString = "(int :: " + id + ")"
+	}
+	case class TypedPattern(ruleName: Int, patternContent: List[PatternAtom], typ: Symbol){
+		override def toString = ruleName + ": " + patternContent.fold("")((a, b) => a.toString + b.toString) + " :: " + typ
+	}
+	
+	//sealed abstract class TransformerAtom{def tag: Int}
+	//case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom
+	//case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom
+	//case class IntegerMatcher(tag: Int) extends TransformerAtom
+	//
+	//type TransformerSequence = List[TransformerAtom] 
+	//case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence)
+	//case class TransformerRule(from: List[GrammarRuleMatcher], to: List[GrammarRuleMatcher])
+	//type TransformerRules = List[TransformerRule]
+	//case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules)
+	
+	
+	
+	def producePatternSynonyms(tRule: TransformerRule, matchedRules: GrammarRules, producedRules: GrammarRules, symbolTable: SymbolTable): PatternSynonyms = {
+		println("PROD-PAT-SYN:")
+		tRule.from.foreach(println)
+		tRule.to.foreach(println)
+		println
+		matchedRules.foreach(println)
+		println
+		producedRules.foreach(println)
+		println
+		println(symbolTable)
+		println("END")
+		println
+		
+		for(fromRule <- tRule.from; toRule <- tRule.to; if(matching(fromRule, toRule))) yield {
+			PatternSynonym(
+				TypedPattern(-1, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.id)),
+				TypedPattern(-2,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.id))	
+			)
+		}
+	}
+	
+	def matching(from: GrammarRuleMatcher, to: GrammarRuleMatcher): Boolean = {
+		for(toAtom <- to.rhs){
+			println(toAtom)
+			toAtom match {
+				case _:NonterminalMatcher if(toAtom.tag != -1 && !(names(from)(toAtom))) => return false
+				case _ => {}
+			} 
+		}
+		return true
+	}
+	
+	def names(from: GrammarRuleMatcher)(toAtom: TransformerAtom): Boolean = {
+		println
+		from.rhs.foreach(println)
+		for(fromAtom <- from.rhs) fromAtom match {
+			case NonterminalMatcher(_, tagFrom) if(tagFrom == toAtom.tag) => return true
+			case _ => {}
+		}
+		println("not matched: " + toAtom)
+		return false
+	}
+	
+	def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
+			case NonterminalMatcher(id, tag) => TypedPatternVariable(tag, symbolTable(id))
+			case TerminalMatcher(m, tag) => PatternTerminal(m)
+			case IntegerMatcher(tag) => PatternInteger(tag)
+		}
+	
+	
+	def main(args: Array[String]) = {
+		println(g1)
+		val (newG, ps) = transformGrammar(concreteToAbstract)(g1)
+		ps.foreach(println)
+		//println((parseWithGrammar(g1)("5+6*6")).treeString)
+	}
+	
+	
+	//--------- P A R S I N G -----------
 	
 	type Parser[A] = String => Option[(A, String)]
 	def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
@@ -317,12 +424,6 @@ object Transform {
       case Some((t, rest)) if (rest == "") => t
       case None => sys.error("Not an Expression: " + str)
 
-    }
-  }
-		
-	def main(args: Array[String]) = {
-		println(g1)
-		println(transformGrammar(concreteToAbstract)(g1))
-		println(parseWithGrammar(g1)("5+6*6"))
-	}
+    	}
+  	}
 }

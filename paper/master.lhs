@@ -14,7 +14,7 @@
 % 11pt          To set in 11-point type instead of 9-point.
 % authoryear    To obtain author/year citation style instead of numeric.
 
-\usepackage{cleveref,pbox,amsmath,stmaryrd}
+\usepackage{cleveref,pbox,amsmath,stmaryrd,verbatim}
 \usepackage{caption,subcaption,float}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,decorations.markings}
@@ -36,6 +36,12 @@
 % Refer to footnotes via \footnotemark.
 % http://tex.stackexchange.com/a/10116/1340
 \crefformat{footnote}{#2\footnotemark[#1]#3}
+
+\begin{comment}
+\begin{code}
+import Control.Exception(assert)
+\end{code}
+\end{comment}
 
 \begin{document}
 
@@ -91,7 +97,7 @@ rewrite rules
 
 Bacchus-Naur Form is a popular format of describing context-free
 grammars. Algebraic datatypes are an important
-feature in modern funcitonal programming languages. The syntax of
+feature in modern functional programming languages. The syntax of
 Bacchus-Naur Form is almost identical to the declaration of
 mutually recursive regular datatypes. This document explores how
 far this connection can be exploited in language engineering. We
@@ -101,7 +107,7 @@ where the datatype of syntax trees is sufficient description of
 the parser---\emph{and} the pretty printer.
 
 Let us walk through the idea with a simple example:
-left-associatve sum expressions. This is the grammar $S$ with
+left-associative sum expressions. This is the grammar $S$ with
 named production rules:
 
 \begin{align*}
@@ -115,14 +121,23 @@ Following the grammar-datatype correspondance schema in
 |F|. The syntax trees of left-associative sums are exactly the
 values of |S|.
 
+< data S  =  S_1 S Plus F
+<         |  S_2 F
+<
+< data F  =  F_3 Int
+<
+< data Plus = Plus -- the terminal symbol +
+
+\begin{comment}
 \begin{code}
 data S  =  S_1 S Plus F
-        |  S_2 F
+        |  S_2 F deriving (Show, Eq)
 
-data F  =  F_3 Int
+data F  =  F_3 Int deriving (Show, Eq)
 
-data Plus = Plus -- the terminal symbol +
+data Plus = Plus deriving (Show, Eq)
 \end{code}
+\end{comment}
 
 The datatype declaration fully describes the language of
 left-associative sums, which is an LL(1) language. The user
@@ -133,7 +148,13 @@ it in the datatype declarations.
 < data F  =  F_3 Int                 {--}  deriving LL1
 
 < expr = parseLL1 "1 + 2 + 3"
-< -- |S_1  (S_1 (S_2 (F_3 1)) Plus (S_2 (F_3 2))) Plus (S_2 (F_3 3))|
+< -- |S_1  (S_1 (S_2 (F_3 1)) Plus (F_3 2)) Plus (F_3 3)|
+
+\begin{comment}
+\begin{code}
+expr = S_1  (S_1 (S_2 (F_3 1)) Plus (F_3 2)) Plus (F_3 3)
+\end{code}
+\end{comment}
 
 
 \begin{figure}
@@ -149,7 +170,7 @@ Syntax tree & is & value of a datatype
 \label{gdc}
 \end{figure}
 
-There are several advantages in specifying a langauge's concrete
+There are several advantages in specifying a language's concrete
 syntax through the datatype of its abstract syntax trees.
 \begin{enumerate}
 \item Rapid prototyping: The delay between the design and
@@ -175,13 +196,13 @@ sums. With left-recursion-elimination as a component of the
 manually for each of their languages.
 
 \item Rapid deployment of parsing technologies: Once a new
-technology (like mixfix parsing~\citep{Dan11}) is
-implemented for datatypes-as-language-descriptions, it enjoys a
+technology (e.~g., mixfix parsing~\citep{Dan11}) were
+implemented for datatypes-as-language-descriptions, it'd enjoy a
 low adoption overhead. Instead of learning the technique and
-applying it to their language manually, users can invoke the
-tool in a library. Together with the widespread support of
-algebraic datatypes and the low learning curve, new technologies
-can quickly reach a large audience.
+applying it to their language manually, users could invoke the
+tool in a library. New technologies would quickly reach a large
+audience due to widespread support of algebraic datatypes and the
+shallow learning curve for users.
 \end{enumerate}
 
 
@@ -195,7 +216,7 @@ recursion by a textbook procedure, producing the grammar $S'$.
 
 \begin{align*}
 S' &::= F~R & (S_1')\\
-R  &::= +~F & (R_1)\\
+R  &::= +~S' & (R_1)\\
 R  &::= \epsilon & (R_2)\\
 F  &::= \mbox{integer} & (F_3)
 \end{align*}
@@ -204,27 +225,29 @@ Following \cref{gdc}, we can define new datatypes for the syntax
 trees of $S'$ and build an LL(1) parser to produce values of the
 datatype |S'|.
 
+< data S'  =  S_1prime F R
+< data R   =  R_1 Plus S'  |  R_2
+
+\begin{comment}
 \begin{code}
-data S'  =  S_1prime F R
-data R   =  R_1 Plus S'  |  R_2
+data S'  =  S_1prime F R deriving (Show, Eq)
+data R   =  R_1 Plus S'  |  R_2 deriving (Show, Eq)
 \end{code}
+\end{comment}
 
 However: The grammar $S'$ is created to appease the LL(1) parsing
 algorithm. To maintain the abstraction barrier, the derived LL(1)
 parser should produce values of the datatype |S| instead. The
 missing link is the coercion from |S'| to |S|, without which
 left-recursion-elimination cannot be fully automatic.
-We will show the code of the coercion later
-[CROSSREF].
+We will show the code of the coercion in \cref{semantics}.
 
 We have seen how grammar transformations are important to support
 datatypes as language descriptions. Why, then, do we want
-\emph{bidirectional} grammar transformations? Firstly, the
-backward transformation is useful in pretty-printing: Since the
-concrete syntax tree is closer to the string syntax, it is easier
-to convert an abstract syntax tree to a concrete syntax tree
-before printing it. Secondly, the backward transformation is used
-in the forward transformation sometimes [CROSSREF].
+\emph{bidirectional} grammar transformations? Because we use the
+backward transformation sometimes in the forward transformation
+(\cref{backward}), and because the backward transformation is
+useful independently in pretty-printing.
 
 
 \section{Our approach, built from existing solutions}
@@ -314,9 +337,9 @@ The choice of the intermediate language in \cref{arch}
 is a key design decision.
 It has to be powerful enough to support common and established
 grammar transformations in language engineering, it has to be
-regular enough to be generated automatically, and it has to be
+regular enough for automatic generation, and it has to be
 bidirectional enough to support backward syntax tree
-transformations. \emph{Recursive pattern synonyms} fulfills all 3
+transformations. \emph{Recursive pattern synonyms} fulfil all 3
 conditions with the additional benefit of being intuitive to
 human programmers, who then retains the possibility to code in
 the intermediate language.
@@ -331,17 +354,17 @@ pattern synonym |Triple| to pattern-match on lists of 3 elements:
 
 There is a deep connection between pattern synonyms and
 \emph{views}~\citep{Wad87}. In fact, one may think of views as a
-way to implement of many kinds of pattern synonyms. From the
+way to implement many kinds of pattern synonyms. From the
 \emph{views} perspective, constructors defined by pattern
 synonyms constitute a datatype of their own, called the
 \emph{view}. In the example above, |Triple| would be a
 constructor of a view on lists. There are bidirectional
-conversions between the original datatype and views, which are
-invoked every time the user pattern-matches on the original datatype
-with a view constructor. Our approach shares with \emph{views}
+coercions between the original datatype and the view, which are
+invoked every time the constructor of one is used to create or
+destroy a value of the other. Our approach shares with \emph{views}
 the mental picture of pattern matching as bidirectional
-conversion, but our objective is the ``inverse'' of that of
-views: Bidirectional conversions are our desired output, and we
+coercion, but our objective is the ``inverse'' of that of
+views: Bidirectional coercions are our desired output, and we
 support them through pattern synonyms.
 
 Our interest is about \emph{recursive pattern synonyms}, or more
@@ -362,15 +385,15 @@ Nonlinear, nested, mutually-recursive pattern synonyms are
 powerful enough to express highly nontrivial syntax tree
 transformations. For example, left-recursion-elimination on the
 grammar of left-associative sums are mostly captured by the
-following synonym (\cref{intro}):
+following synonym (\cref{intro,syntax}):
 
 < pattern S_1prime f_1 (S_1 s Plus f_n)  =  S_1 (S_1prime f_1 s) Plus f_n
 
 \subsection{Pattern synonyms and rewrite rules}
 
 Pattern synonyms are closely related to rewrite
-rules~\citep{Lae03}. In the field of rewrite rules for attribute
-grammars, the work by \citet{Mar14} is closest to our idea of
+rules~\citep{Lae03}. In attribute
+grammars, \citet{Mar14} is closest to our idea of
 compiling pattern synonyms to syntax tree transformations. In
 \citeauthor{Mar14}'s system, syntax tree transformations are
 described by recursive rewrite rules, which can be inverted to
@@ -389,15 +412,201 @@ language of forward transformations, and cannot be inverted again
 with the same technique. In this sense, recursive pattern
 synonyms are the natural \emph{closure} of \citeauthor{Mar14}'s
 rewrite rules, gaining symmetry, robustness and conceptual
-transparency in the process.
-
-\section{Grammar transformation language}
+clarity in the process.
 
 \section{Recursive pattern synonyms}
+\label{syntax}
 
-\section{Semantics of recursive pattern synonyms}
+This section describes the syntax of recursive pattern synonyms.
+\Cref{semantics} describes their meanings. For a pattern synonym
+to be meaningful as bidirectional tree transformation, we require
+only that top-level variables are type-annotated.
+\begin{align*}
+s & ::= \textbf{pattern}~p~=~p &
+\mbox{pattern synonym}
+\\\\
+p & ::=  &\mbox{pattern}\\
+&\quad\mid~ x & \mbox{variable}\\
+&\quad\mid~ c~\overline{p} &\mbox{constructor application}\\
+&\quad\mid~ p :: \tau &\mbox{type annotation}
+\end{align*}
+
+As an example, here are all the pattern synonyms necessary to
+describe the tree transformation from the right-recursive grammar
+$S'$ to the left-recursive grammar $S$ (\cref{intro}). The
+right-hand-side of the last pattern synonym is the variable |s|
+annotated by the data\-type~|S|.
+
+
+< pattern S_1prime f_1 R_2               =  S_2 f_1
+< pattern S_1prime f_1 (S_2 f_2)         =  S_1 (S_2 f_1) Plus f_2
+< pattern S_1prime f_1 (S_1 s Plus f_n)  =  S_1 (S_1prime f_1 s) Plus f_n
+<
+<
+< pattern R_1 Plus s                     =  s :: S
+
+
+\section{Interpreting recursive pattern synonyms}
+\label{semantics}
+
+For now, this section gives a rough idea about the meaning of
+recursive pattern synonyms via an inaccurate translation
+procedure into Haskell. To make the translation precise, we need
+a deeper understanding of recursive pattern matching
+(\cref{meta}).
+
+In a nutshell, the translation process boils down to inserting
+coercions and names into pattern synonyms until they typecheck as
+a Haskell program. Here's a brief overview of the steps; we will
+go through each one with an example later.
+\begin{enumerate}
+\item \emph{Make up names}: Check the top-level constructor
+or type-annotation of pattern synonyms to gather the input/output
+type of coercions. Give each coercion a name.
+\item \emph{Prepend coercion names}: Replace the keyword
+|pattern| by the names of coercions of appropriate types.
+\item \emph{Insert coercions}: If there are type errors, insert
+coercions of the appropriate type at error sites.
+\item \emph{Remove active patterns}: If a coercion |f:A->B| appears in
+a pattern, then move this pattern inside a case-expression
+matching the result of the backward coersion |B->A|.
+\item \emph{Merge case-expressions}: If the context of two
+case-expressions are equal, merge them into one case-expression.
+\end{enumerate}
+Steps~1--4 translate pattern synonyms into well-typed Haskell
+programs. Step~5 is an ad-hoc measure to work-around the
+sequential nature of nested case-expressions; it is not
+applicable enough to rule out all unintended runtime errors. To
+do that, we need a model of recursive pattern
+matching first (\cref{meta}).
+
+\subsection{Make up names}
+
+The pattern synonyms in \cref{syntax} demonstrate 2 types of
+coercions: between $S'$ and $S$, and between $R$ and $S$. Let us
+name the four coercions.
+
+%format fromS = "\ensuremath{\Varid{from}_{S^\prime}}"
+%format toS   = "\ensuremath{\Varid{to}_{S^\prime}}"
+%format fromR = "\ensuremath{\Varid{from}_{R}}"
+%format toR   = "\ensuremath{\Varid{to}_{R}}"
+
+\begin{code}
+fromS  ::  S' -> S
+toS    ::  S -> S'
+fromR  ::  R -> S
+toR    ::  S -> R
+\end{code}
+
+\subsection{Prepend coercion names}
+
+\begin{comment}
+\begin{code}
+fromR  (R_1 Plus s)                           =  (fromS s) :: S
+\end{code}
+\end{comment}
+
+We replace the keyword |pattern| by the name of the coercion of
+the same type, and arrive at some rudimentary Haskell
+definitions. The first equation is type-correct already; we leave it
+as-is. The other equations have type errors and need further
+processing.
+
+\begin{code}
+fromS (S_1prime f_1 R_2)               =  S_2 f_1
+\end{code}
+
+< fromS (S_1prime f_1 (S_2 f_2))         =  S_1 (S_2 f_1) Plus f_2
+< fromS (S_1prime f_1 (S_1 s Plus f_n))  =  S_1 (S_1prime f_1 s) Plus f_n
+<
+<
+< fromR (R_1 Plus s)                     =  s :: S
+
+\subsection{Insert coercions}
+
+To fix the type errors, we insert coercions at error sites. 
+
+< fromS  (S_1prime f_1 (toR (S_2 f_2)))         =
+<        S_1 (S_2 f_1) Plus f_2
+<
+< fromS  (S_1prime f_1 (toR (S_1 s Plus f_n)))  =
+<        S_1 (fromS (S_1prime f_1 (toR s))) Plus f_n
+<
+<
+< fromR  (R_1 Plus s)                           =  (fromS s) :: S
+
+The last line becomes well-typed. However, the first two
+equations have calls to the function |toR| in their patterns,
+which is forbidden in Haskell.
+
+
+\subsection{Remove active patterns}
+
+We remove calls to |toR| in patterns by converting them to
+case-expressions matching on the result of the inverse coercion,
+|fromR|. At this point, both equations become well-typed.
+
+< fromS  (S_1prime f_1 r)  =   case fromR r of
+<        S_2 f_2           ->  S_1 (S_2 f_1) Plus f_2
+<
+< fromS  (S_1prime f_1 r)  =   case fromR r of
+<        S_1 s Plus f_n    ->  S-1 (fromS (S_1prime f_1 (toR s))) Plus f_n
+
+\subsection{Merge case-expressions}
+
+At this point, Haskell's type checker accepts the translated
+program. However, the two equations in the previous step have the
+same top-level pattern; the first equation made it impossible to
+execute the second equation. To prevent that, we merge these two
+equations into one.
+
+\begin{code}
+fromS  (S_1prime f_1 r)  =   case fromR r of
+       S_2 f_2           ->  S_1 (S_2 f_1) Plus f_2
+       S_1 s Plus f_n    ->  S_1 (fromS (S_1prime f_1 (toR s))) Plus f_n
+\end{code}
+
+
+\subsection{Generate backward coercions}
+\label{backward}
+
+The coercion |fromS| calls the backward coercions |toR|. To
+generate the backward coercions, simply swap the left-hand-side
+and right-hand-side of the pattern synonyms and carry out steps
+2--4 on them. These are the flipped pattern synonyms:
+
+< pattern S_2 f_1                 =  S_1prime f_1 R_2
+< pattern S_1 (S_2 f_1) Plus f_2  =  S_1prime f_1 (S_2 f_2)
+< pattern S_1 (S_1prime f_1 s)    =  S_1prime f_1 (S_1 s Plus f_n)
+< pattern s :: S                  =  R_1 Plus s
+
+Below is the result of translating the flipped pattern synonyms.
+
+\begin{code}
+toR s = R_1 Plus (toS s)
+
+toS  (S_2 f_1)                 =   S_1prime f_1 R_2
+toS  (S_1 (S_2 f_1) Plus f_2)  =   S_1prime f_1 (toR (S_2 f_2))
+toS  (S_1 s_0 Plus f_n)        =   case toS s_0 of
+     S_1prime f_1 s {--} -> {--}  S_1prime f_1 (toR (S_1 (fromR s) Plus f_n))
+\end{code}
+%
+One may verify that |fromS| is the left-inverse of |toS|:
+
+< expr == fromS (toS expr)
+
+evaluates to |True| for all finite |expr :: S|. However, this is
+not the case in general. Recursive pattern synonyms can define
+pairs of very partial coercions, neither of which is a left- or
+right-inverse of the other. While \emph{equational} reasoning is
+all but impossible with this lenient attitude, we should still
+enjoy some form of \emph{relational} reasoning (\cref{meta}).
+
 
 \section{Metatheory of recursive pattern synonyms}
+\label{meta}
+
+\section{Grammar transformation language}
 
 \section{Intermediate language generation}
 

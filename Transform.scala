@@ -3,20 +3,34 @@ object Transform {
 	import sext._
 	
 	sealed trait GrammarAtom
-	case class Nonterminal(sym: Symbol) extends GrammarAtom
-	case class Terminal(sym: String) extends GrammarAtom
-	case object IntegerTerminal extends GrammarAtom
+	case class Nonterminal(sym: Symbol) extends GrammarAtom{
+		override def toString = sym.toString.tail
+	}
+	case class Terminal(sym: String) extends GrammarAtom{
+		override def toString = sym
+	}
+	case object IntegerTerminal extends GrammarAtom{
+		override def toString = "<int>"
+	}
 	
 	//todo: 
 	/*
 	- produce patterns (?)
 	*/
-	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int)
+	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int){
+		def asString(indent: String) = indent + tag + " | " + lhs + " ->" + rhs.map(x => x.toString).fold("")(joinStringsBy(" "))
+	}
 	type GrammarRules = List[GrammarRule]
 	
 	case class Grammar(start: Nonterminal, rules: GrammarRules){
 		def lookup(nonterminal: Nonterminal): List[List[GrammarAtom]] = rules.filter({gr => gr.lhs.sym == nonterminal.sym}).map(r => r.rhs)
+		override def toString = "Grammar:" +
+			"\n  Start: " + start +
+			"\n  Rules:"  + rules.map(x => x.asString("    ")).fold("")(joinStringsBy("\n")) + 
+			"\n"
 	}
+	
+	def joinStringsBy(join: String)(a: Any, b: Any) = a.toString + join + b.toString
 	
 	val c = Nonterminal('C)
 	val a = Nonterminal('A)
@@ -49,15 +63,33 @@ object Transform {
 	val g2 = Grammar(a, rules2)
 	
 	sealed abstract class TransformerAtom{def tag: Int}
-	case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom
-	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom
-	case class IntegerMatcher(tag: Int) extends TransformerAtom
+	case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom {
+		override def toString = getNthVariableName(id) + ":" + tag
+	}
+	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom {
+		override def toString = if(tag >= 0) matches + ":" + tag else matches
+	}
+	case class IntegerMatcher(tag: Int) extends TransformerAtom {
+		override def toString = "<int>:" + tag
+	}
 	
 	type TransformerSequence = List[TransformerAtom] 
-	case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence)
-	case class TransformerRule(from: List[GrammarRuleMatcher], to: List[GrammarRuleMatcher])
+	case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence) {
+		override def toString = lhs + " ->" + rhs.map(x => x.toString).fold("")(joinStringsBy(" "))
+	}
+	case class TransformerRule(from: List[GrammarRuleMatcher], to: List[GrammarRuleMatcher]) {
+		def asString(indent: String) = indent + "from:" + 
+			from.map(x => x.toString).fold("")(joinStringsBy("\n  " + indent)) +
+			"\n" + indent + "to:" +
+			to.map(x => x.toString).fold("")(joinStringsBy("\n  " + indent))
+	}
 	type TransformerRules = List[TransformerRule]
-	case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules)
+	case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules) {
+		override def toString = "GrammarTransformer:" +
+			"\n  Start: " + start +
+			"\n  Rules:"  + rules.map(x => x.asString("    ")).fold("")(joinStringsBy("\n")) + 
+			"\n"
+	}
 	
 	//C to A: take C -> C + S, C -> S and produce A -> A + A
 	val transformCtoA = TransformerRule(
@@ -186,6 +218,12 @@ object Transform {
 		st + ((id, Symbol(next)))
 	}
 	
+	def getNthVariableName(n: Int): String = {
+		var cur = "A"
+		for(i <- 1 until n){cur = nextLexicographic(cur)}
+		cur
+	}
+	
 	//increment on Strings over {\epsilon, A, B, C, ..., Z}
 	def nextLexicographic(nts: String): String = {
 		// \epsilon+1 == "A"
@@ -208,6 +246,7 @@ object Transform {
 					res = c + res
 				}
 			}
+			if(incrementing) res = 'A' + res
 			res
 		}
 	}
@@ -263,83 +302,67 @@ object Transform {
 	case class TypedPatternVariable(id: Int, typ: Symbol) extends PatternAtom{
 		override def toString = "(" + id + " :: " + typ + ")"
 	}
-	case class PatternTerminal(str: String) extends PatternAtom{
-		override def toString = " " + str + " "
+	case class PatternTerminal(id: Int, str: String) extends PatternAtom{
+		override def toString = "(" + id + " :: " + str + ")"
 	}
-	case class PatternInteger(id: Int) extends PatternAtom{
-		override def toString = "(int :: " + id + ")"
-	}
+
+	//@.tail: remove the "'" ("prime") caused by types being symbols
 	case class TypedPattern(ruleName: Int, patternContent: List[PatternAtom], typ: Symbol){
-		override def toString = ruleName + ": " + patternContent.fold("")((a, b) => a.toString + b.toString) + " :: " + typ
+		override def toString = (typ.toString + ruleName).tail + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ
 	}
+	//Name as String
+	//case class TypedPattern(ruleName: String, patternContent: List[PatternAtom], typ: Symbol){
+	//	override def toString = ruleName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ
+	//}
 	
-	//sealed abstract class TransformerAtom{def tag: Int}
-	//case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom
-	//case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom
-	//case class IntegerMatcher(tag: Int) extends TransformerAtom
-	//
-	//type TransformerSequence = List[TransformerAtom] 
-	//case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence)
-	//case class TransformerRule(from: List[GrammarRuleMatcher], to: List[GrammarRuleMatcher])
-	//type TransformerRules = List[TransformerRule]
-	//case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules)
+		
 	
-	
+	//produce all PatternSynonyms where all variables on the right side get resolved by the left side
+	//get the PatternSynonym name by looking up, which grammar rule matches the transformerRule
 	
 	def producePatternSynonyms(tRule: TransformerRule, matchedRules: GrammarRules, producedRules: GrammarRules, symbolTable: SymbolTable): PatternSynonyms = {
-		println("PROD-PAT-SYN:")
-		tRule.from.foreach(println)
-		tRule.to.foreach(println)
-		println
-		matchedRules.foreach(println)
-		println
-		producedRules.foreach(println)
-		println
-		println(symbolTable)
-		println("END")
-		println
-		
-		for(fromRule <- tRule.from; toRule <- tRule.to; if(matching(fromRule, toRule))) yield {
+		for(fromRule <- tRule.from; toRule <- tRule.to; if(matching(fromRule, toRule)); 
+			 matchedRule <- matchedRules;  if(matches(symbolTable,  matchedRule, fromRule) != None);
+			producedRule <- producedRules; if(matches(symbolTable, producedRule,   toRule) != None)) yield {
 			PatternSynonym(
-				TypedPattern(-1, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.id)),
-				TypedPattern(-2,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.id))	
+				TypedPattern( matchedRule.tag, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.id)),
+				TypedPattern(producedRule.tag,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.id))	
 			)
+			//Name as String:
+			//PatternSynonym(
+			//	TypedPattern(( matchedRule.lhs.sym +  matchedRule.tag.toString).tail, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.id)),
+			//	TypedPattern((producedRule.lhs.sym + producedRule.tag.toString).tail,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.id))	
+			//)
 		}
 	}
 	
 	def matching(from: GrammarRuleMatcher, to: GrammarRuleMatcher): Boolean = {
 		for(toAtom <- to.rhs){
-			println(toAtom)
-			toAtom match {
-				case _:NonterminalMatcher if(toAtom.tag != -1 && !(names(from)(toAtom))) => return false
-				case _ => {}
-			} 
+			if(toAtom.tag >= 0 && !(names(from)(toAtom))) return false
 		}
 		return true
 	}
 	
 	def names(from: GrammarRuleMatcher)(toAtom: TransformerAtom): Boolean = {
-		println
-		from.rhs.foreach(println)
-		for(fromAtom <- from.rhs) fromAtom match {
-			case NonterminalMatcher(_, tagFrom) if(tagFrom == toAtom.tag) => return true
-			case _ => {}
+		for(fromAtom <- from.rhs){ 
+			if(fromAtom.tag == toAtom.tag) return true
 		}
-		println("not matched: " + toAtom)
 		return false
 	}
 	
 	def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
 			case NonterminalMatcher(id, tag) => TypedPatternVariable(tag, symbolTable(id))
-			case TerminalMatcher(m, tag) => PatternTerminal(m)
-			case IntegerMatcher(tag) => PatternInteger(tag)
+			case TerminalMatcher(m, tag) => PatternTerminal(tag, m)
+			case IntegerMatcher(tag) => PatternTerminal(tag, "<int>")
 		}
 	
 	
 	def main(args: Array[String]) = {
 		println(g1)
+		println(concreteToAbstract)
 		val (newG, ps) = transformGrammar(concreteToAbstract)(g1)
 		ps.foreach(println)
+		//println(ps.treeString)
 		//println((parseWithGrammar(g1)("5+6*6")).treeString)
 	}
 	

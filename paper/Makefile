@@ -43,7 +43,7 @@ open: master.pdf
 	$(latex) master $(REDIR) && $(latex) master $(REDIR)
 	touch master.blg # Otherwise it will look "out-of-date" and trigger a rebuild without changes.
 
-%.tex: %.lhs
+master.tex: master.lhs DirtyWork.tex
 	lhs2TeX $< > $@
 
 %.blg: %.aux %.bib
@@ -51,8 +51,6 @@ open: master.pdf
 
 %.aux: %.tex DirtyWork.tex
 	$(latex) master $(REDIR)
-
-master.aux:	DirtyWork.tex
 
 %.tex: %.hs
 	runHaskell $< > $@

@@ -567,7 +567,7 @@ fromS  (S_1prime f_1 r)  =   case fromR r of
 \end{code}
 
 
-\subsection{Generating backward coercions}
+\subsection{Generate backward coercions}
 \label{backward}
 
 The coercion |fromS| calls the backward coercions |toR|. To

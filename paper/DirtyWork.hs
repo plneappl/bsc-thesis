@@ -36,12 +36,15 @@ subscripts =
   [ ("i", "i")
   , ("m", "m")
   , ("n", "n")
+  , ("r", "r")
+  , ("s", "s")
   , ("n1", "n-1")
   ] ++
   map (\n -> let s = show n in (s, s)) [0..9]
 
 subscribedNames :: [String]
-subscribedNames = ["A", "B", "F", "f", "field", "Record", "R", "S", "T", "t"]
+subscribedNames =
+  words "A B F f field from Record R S s T t to"
 
 formatKeyword :: String -> String
 formatKeyword x = "\"\\KEYWORD{" ++ x ++ "}\""
@@ -56,7 +59,7 @@ formatKeywords =
 formatSubscripts :: [String]
 formatSubscripts =
   [ "%format " ++ x ++ "_" ++ lhs ++ postfix ++ 
-    " = \"\\ensuremath{" ++ x ++ "_{" ++ rhs ++ "}" ++ prime ++ "}\""
+    " = \"\\ensuremath{\\Varid{" ++ x ++ "}_{" ++ rhs ++ "}" ++ prime ++ "}\""
   | x <- subscribedNames
   , (lhs, rhs) <- subscripts
   , (postfix, prime) <- [("", ""), ("prime", "^\\prime")]

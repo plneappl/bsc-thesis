@@ -85,7 +85,7 @@ object Grammar {
     }
   }
   def keywordParser(keyword: String): Parser[SyntaxTree] = 
-    parseString(keyword) ^^ { x => LeafString(keyword) }
+    parseString(keyword) ^^ { x => LeafString(x) }
   
   def digitsParser: Parser[SyntaxTree] = 
     parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
@@ -102,7 +102,7 @@ object Grammar {
 	
 	def parseRHS(rule: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = rule.rhs match {
 		case head :: tail => {
-			println("rule: " + rule.tag + ": " + rule.asString("", 1))
+			//println("rule: " + rule.tag + ": " + rule.asString("", 1))
 			recurseParseRHS(head, GrammarRule(rule.lhs, tail, rule.tag), grammar)
 		}
 		case Nil => {s => Some((Nil, s))}

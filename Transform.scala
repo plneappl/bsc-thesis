@@ -4,8 +4,6 @@ object Transform {
 	
 	import Grammar._
 	
-	import ReadableSyntaxGrammar.{grammar => grammarSyntaxDef}
-	
 	val c = Nonterminal('C)
 	val a = Nonterminal('A)
 	val s = Nonterminal('S)
@@ -37,8 +35,8 @@ object Transform {
 	val g2 = Grammar(a, rules2)
 	
 	sealed abstract class TransformerAtom{def tag: Int}
-	case class NonterminalMatcher(id: Int, tag: Int) extends TransformerAtom {
-		override def toString = getNthVariableName(id) + ":" + tag
+	case class NonterminalMatcher(name: String, tag: Int) extends TransformerAtom {
+		override def toString = name +  (if(tag != -1) ":" + tag else "")
 	}
 	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom {
 		override def toString = if(tag >= 0) matches + ":" + tag else matches
@@ -48,6 +46,8 @@ object Transform {
 	}
 	
 	type TransformerSequence = List[TransformerAtom] 
+	type TransformerRules = List[TransformerRule]
+	
 	case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence) {
 		override def toString = lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
 	}
@@ -57,7 +57,7 @@ object Transform {
 			"\n" + indent + "to:" +
 			to.map(_.toString).fold("")(joinStringsBy("\n  " + indent))
 	}
-	type TransformerRules = List[TransformerRule]
+	
 	case class GrammarTransformer(start: NonterminalMatcher, rules: TransformerRules) {
 		override def toString = "GrammarTransformer:" +
 			"\n  Start: " + start +
@@ -68,22 +68,22 @@ object Transform {
 	//C to A: take C -> C + S, C -> S and produce A -> A + A
 	val transformCtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, 1), TerminalMatcher("+", 2), NonterminalMatcher(1, 3))),
-			GrammarRuleMatcher(NonterminalMatcher(1, 0), List(NonterminalMatcher(2, -1)))
+			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", 1), TerminalMatcher("+", 2), NonterminalMatcher("B", 3))),
+			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", -1)))
 		),
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("+", 2), NonterminalMatcher(0, 3)))
+			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), TerminalMatcher("+", 2), NonterminalMatcher("A", 3)))
 		)
 	)
 	
 	//S to A: take S -> S * F, S -> F and produce A -> A * A
 	val transformStoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, 1), TerminalMatcher("*", 2), NonterminalMatcher(2, 3))),
-			GrammarRuleMatcher(NonterminalMatcher(2, 0), List(NonterminalMatcher(3, -1)))
+			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", 1), TerminalMatcher("*", 2), NonterminalMatcher("C", 3))),
+			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", -1)))
 		),
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(NonterminalMatcher(0, 1), TerminalMatcher("*", 2), NonterminalMatcher(0, 3)))
+			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), TerminalMatcher("*", 2), NonterminalMatcher("A", 3)))
 		)
 	)
 
@@ -91,26 +91,26 @@ object Transform {
 	//F to A: take F -> [ C ], F -> int and produce A -> int
 	val transformFtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(TerminalMatcher("[", -1), NonterminalMatcher(1, -1), TerminalMatcher("]", -1))),
-			GrammarRuleMatcher(NonterminalMatcher(3, 0), List(IntegerMatcher(1)))	
+			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(TerminalMatcher("[", -1), NonterminalMatcher("B", -1), TerminalMatcher("]", -1))),
+			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(IntegerMatcher(1)))	
 		),
 		List(
-			GrammarRuleMatcher(NonterminalMatcher(0, 0), List(IntegerMatcher(1)))
+			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(IntegerMatcher(1)))
 		)
 	)
 	
 	//NonterminalMatchers can identify themselves with any symbol, this stores the identification while transforming
-	type SymbolTable = Map[Int, Symbol]
+	type SymbolTable = Map[String, Symbol]
 	
 	//insert unknown symbols and check known for equality, fail if not equal
-	def checkSymbolTable(st: SymbolTable, sym: Symbol, id: Int): SymbolTable = st.get(id) match {
+	def checkSymbolTable(st: SymbolTable, sym: Symbol, name: String): SymbolTable = st.get(name) match {
 		case Some(sym2) if(sym2 == sym) => st
-		case None => st + ((id, sym))
+		case None => st + ((name, sym))
 	}
 		
 	//match a grammar rule with a matcher one atom at a time	
 	def matches(st: SymbolTable, grammarRule: GrammarRule, matcher: GrammarRuleMatcher): Option[SymbolTable] = if(grammarRule.rhs.size == matcher.rhs.size) try {
-		var symbolTable = checkSymbolTable(st, grammarRule.lhs.sym, matcher.lhs.id)
+		var symbolTable = checkSymbolTable(st, grammarRule.lhs.sym, matcher.lhs.name)
 		for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) (ga, ma) match {
 			case (Nonterminal(sym), NonterminalMatcher(id, _)) => symbolTable = checkSymbolTable(st, sym, id)
 			case (Terminal(str1), TerminalMatcher(str2, _)) if (str1 == str2)	=> {}
@@ -183,18 +183,18 @@ object Transform {
 	}
 	
 	//insert a new Symbol with the target ID
-	def extendSymbolTable(st: SymbolTable, id: Int): SymbolTable = {
-		if(st.isDefinedAt(id)) return st
+	def extendSymbolTable(st: SymbolTable, name: String): SymbolTable = {
+		if(st.isDefinedAt(name)) return st
 		var next = "A"
 		while(st.values.toList.contains(Symbol(next))){
 			next = nextLexicographic(next)
 		}
-		st + ((id, Symbol(next)))
+		st + ((name, Symbol(next)))
 	}
 	
 	def getNthVariableName(n: Int): String = {
 		var cur = "A"
-		for(i <- 1 until n){cur = nextLexicographic(cur)}
+		for(i <- 0 until n){cur = nextLexicographic(cur)}
 		cur
 	}
 	
@@ -246,7 +246,7 @@ object Transform {
 				case None => {}
 			}	
 		}
-		(Grammar(Nonterminal(symbolTable(transformer.start.id)), outRules), patternSynonyms)
+		(Grammar(Nonterminal(symbolTable(transformer.start.name)), outRules), patternSynonyms)
 	}
 	
 	def tagGrammarRules(rules: List[GrammarRule], nextTag: Int): (List[GrammarRule], Int) = rules match {
@@ -257,7 +257,7 @@ object Transform {
 		case Nil => (List[GrammarRule](), nextTag)
 	}
 	
-	def concreteToAbstract = GrammarTransformer(NonterminalMatcher(0, 0), List(transformFtoA, transformCtoA, transformStoA))	
+	def concreteToAbstract = GrammarTransformer(NonterminalMatcher("A", 0), List(transformFtoA, transformCtoA, transformStoA))	
 	
 	
 		
@@ -292,8 +292,8 @@ object Transform {
 			 matchedRule <- matchedRules;  if(matches(symbolTable,  matchedRule, fromRule) != None);
 			producedRule <- producedRules; if(matches(symbolTable, producedRule,   toRule) != None)) yield {
 			PatternSynonym(
-				TypedPattern( matchedRule.tag, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.id)),
-				TypedPattern(producedRule.tag,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.id))	
+				TypedPattern( matchedRule.tag, fromRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(fromRule.lhs.name)),
+				TypedPattern(producedRule.tag,   toRule.rhs.map(translatePatternAtom(symbolTable)), symbolTable(  toRule.lhs.name))	
 			)
 			//Name as String:
 			//PatternSynonym(
@@ -324,21 +324,6 @@ object Transform {
 		}
 	
 	
-	def main(args: Array[String]) = {
-		println(g1)
-		println(concreteToAbstract)
-		val (newG, ps) = transformGrammar(concreteToAbstract)(g1)
-		println
-		println(grammarSyntaxDef)
-		//ps.foreach(println)
-		//println(ps.treeString)
-		//println((parseWithGrammar(g1)("5+6*6")).treeString)
-		val source = scala.io.Source.fromFile("readableSyntax1.tr")
-		val tr = source.mkString
-		
-		source.close
-		(parseWithGrammar(grammarSyntaxDef)(tr))
-		println
-	}
+	
 	
 }

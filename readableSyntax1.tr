@@ -1,3 +1,5 @@
+start:
+D
 in:
 A -> B:1 + A:2 | B
 out: 
@@ -31,7 +33,3 @@ C -> <int>
 seq: 
 D -> <int>
 
-del:
-A -> B
-B -> C
-C -> [ A ]

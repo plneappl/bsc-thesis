@@ -1,147 +1,138 @@
-/** Bidirectional grammar transformation:
-  * Grammar is to syntax trees as datatype is to its inhabitants.
-  *
-  * Usage for grammars:
-  *
-  * - Chomsky normal form
-  * - inlining of rules at a position until all left-recursions are explicit
-  * - left-recursion elimination
-  * - left-factoring
-  * - removing explicit parentheses
-  * - remove explicit precedence from grammar
-  *
-  * Usage for datatypes:
-  *
-  * - convert mutually recursive datatypes to singly recursive datatypes
-  *
-  * Transformations:
-  *
-  * - naming (inverse of inlining): BNF
-  * - inlining (inverse of naming): mutual recursion elimination
-  * - multiple naming: left recursion elimination, left factoring
-  * - deleting with representative: parentheses removal
-  * - forgeting with parentheses as way back
-  */
-
-
-object Grammar extends App {
-  // context-free grammar
-  type CFG = List[(Atom, List[Atom])]
-
-  trait Atom extends Construct
-  trait Construct
-  case class Select(children: Construct*) extends Construct
-  case class Concat(children: Construct*) extends Construct
-  case class Repeat(children: Construct*) extends Construct
-
-  // abstract syntax tree
-  sealed trait Tree { def tag: Atom }
-  case class Leaf(tag: Atom, get: String) extends Tree
-  case class Fork(tag: Atom, children: Tree*) extends Tree
-
-  // test if an atom is a terminal symbol in a context-free grammar
-  def isTerminal(atom: Atom, cfg: CFG): Boolean =
-    ! cfg.exists(_._1 == atom)
-
-  // test that a tree belongs to the language of a grammar
-  def belongs(tree: Tree, cfg: CFG): Boolean = tree match {
-    case Leaf(tag, _) =>
-      isTerminal(tag, cfg)
-
-    case Fork(tag, children @ _*) =>
-      cfg.exists {
-        case (atom, construct) =>
-          atom == tag && construct.size == children.size && {
-            val result = children.zip(construct).map {
-              case (child, atom) =>
-                child.tag == atom && belongs(child, cfg)
-            }
-            result.isEmpty || result.min
-          }
+object Grammar {
+	sealed trait GrammarAtom
+	case class Nonterminal(sym: Symbol) extends GrammarAtom{
+		override def toString = sym.toString.tail
+	}
+	case class Terminal(sym: String) extends GrammarAtom{
+		override def toString = "\"" + sym + "\""
+	}
+	case class Regex(sym: String) extends GrammarAtom{
+		override def toString = "\"" + sym + "\""
+	}
+	case object IntegerTerminal extends GrammarAtom{
+		override def toString = "<int>"
+	}
+	
+	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int){
+		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
+	}
+	type GrammarRules = List[GrammarRule]
+	type RHS = List[GrammarAtom]
+	
+	case class Grammar(start: Nonterminal, rules: GrammarRules){
+		def lookup(nonterminal: Nonterminal): GrammarRules = rules.filter({gr => gr.lhs.sym == nonterminal.sym})
+		override def toString = "Grammar:" +
+			"\n  Start: " + start +
+			"\n  Rules:"  + rules.map(_.asString("    ", rules.length)).fold("")(joinStringsBy("\n")) + 
+			"\n"
+	}
+	
+	def joinStringsBy(join: String)(a: Any, b: Any) = a + join + b
+	def padding(i: Int, n: Int) = " " * (n.toString.length - i.toString.length)
+	
+	sealed trait SyntaxTree
+	case class Branch(nt: Symbol, childs: List[SyntaxTree]) extends SyntaxTree
+	trait Leaf extends SyntaxTree
+	case class LeafString(str: String) extends Leaf
+	case class LeafInteger(i: Int) extends Leaf
+	
+	
+	
+	type Parser[A] = String => Option[(A, String)]
+	def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
+		firstTry(input) orElse secondTry(input)
+  }
+    
+  def sequence[A, B](parseFirstPart: => Parser[A], parseSecondPart: => Parser[B]): Parser[(A, B)] =
+    input => parseFirstPart(input) match {
+      case Some((firstResult, afterFirstPart)) => parseSecondPart(afterFirstPart) match {
+          case Some((secondResult, afterSecondPart)) => Some( ((firstResult, secondResult), afterSecondPart) )
+          case None => None
+        }
+      case None => None
+    }
+    
+  def postprocess[A, B](parser: => Parser[A])(postprocessor: A => B): Parser[B] =
+    input => parser(input) match {
+      case Some( (result, rest) ) => Some( (postprocessor(result), rest) )
+      case None => None
+    }
+	implicit class ParserOps[A](self: => Parser[A]) {
+    def | (that: => Parser[A]): Parser[A] = choice(self, that)
+    def ~ [B] (that: => Parser[B]): Parser[(A, B)] = sequence(self, that)
+    def ^^ [B] (postprocessor: A => B): Parser[B] = postprocess(self)(postprocessor)
+  }
+  
+  def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduceRight((x, y) => x | y)
+  	
+	def parseString(expected: String): Parser[String] = code => {
+		//println("T: trying to match: " + expected)
+    //println("T: with:\n" + code.split("\n")(0))
+    if (code startsWith expected) Some((expected, code drop expected.length))
+    else None
+  }
+  def parseRegex(regex: String): Parser[String] = code => {
+    //println("R: trying to match: '" + regex + "'")
+    //println("R: with:            '" + code + "'")
+    val Pattern = s"(?s)($regex)(.*)".r      	
+    code match {
+      case Pattern(groups @ _*) => {
+      	Some((groups.head, groups.last))
       }
+      case otherwise => {
+      	None
+      }
+    }
   }
-
-  // EXAMPLE: removing explicit parenthesis
-  case object Exp    extends Atom
-  case object Num    extends Atom
-  case object Plus   extends Atom
-  case object LParen extends Atom
-  case object RParen extends Atom
-
-  val input1: CFG = List(
-    Exp -> List(Num),
-    Exp -> List(LParen, Exp, Plus, Exp, RParen)
-  )
-
-  val output1 = List(
-    Exp -> List(Num),
-    Exp -> List(Exp, Plus, Exp)
-  )
-
-  val transform1: CFG => CFG = _ map {
-    case (Exp, List(LParen, Exp, Plus, Exp, RParen)) =>
-      Exp -> List(Exp, Plus, Exp)
-
-    case other => other
+  def keywordParser(keyword: String): Parser[SyntaxTree] = 
+    parseString(keyword) ^^ { x => LeafString(keyword) }
+  
+  def digitsParser: Parser[SyntaxTree] = 
+    parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
+    
+  def regexParser(r: String): Parser[SyntaxTree] = 
+    parseRegex(r) ^^ { x => LeafString(x) }
+  
+	def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
+		//(grammar lookup nonterminal).map(_.asString("", 1)).foreach(println)
+		listToOption((grammar lookup nonterminal).map(parseRHS(_, grammar) ^^ {
+      children => Branch(nonterminal.sym, children)
+    }))
   }
-
-  assert(transform1(input1) == output1)
-
-  lazy val forward1: Tree => Tree = {
-    case Fork(
-      Exp,
-      Leaf(LParen, _), lhs @ Fork(Exp, _*), plus @ Leaf(Plus, _),
-      rhs @ Fork(Exp, _*), Leaf(RParen, _)
-    ) =>
-      Fork(Exp, List(lhs, plus, rhs) map forward1: _*)
-
-    case Fork(tag, children @ _*) =>
-      Fork(tag, children map forward1: _*)
-
-    case Leaf(tag, get) =>
-      Leaf(tag, get)
+	
+	def parseRHS(rule: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = rule.rhs match {
+		case head :: tail => {
+			println("rule: " + rule.tag + ": " + rule.asString("", 1))
+			recurseParseRHS(head, GrammarRule(rule.lhs, tail, rule.tag), grammar)
+		}
+		case Nil => {s => Some((Nil, s))}
+	}
+	
+	def recurseParseRHS(head: GrammarAtom, tail: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = { 
+		parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
+			case (t1, t2) => t1 :: t2
+		}
+	}
+	
+	def parseGrammarAtom(head: GrammarAtom, grammar: Grammar): Parser[SyntaxTree] = head match {
+				case nt: Nonterminal => parseNonterminal(nt, grammar)
+				case Terminal(str) => keywordParser(str)
+				case Regex(str) => regexParser(str)
+				case IntegerTerminal => digitsParser
+			}
+			
+	def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
+		var parser = parseNonterminal(g.start, g)
+    parser(str) match {
+      case Some((t, rest)) => {
+      	if (rest == "") t
+      	else {
+      		println("Not matched!!\n--------\n" + rest + "\n--------\n")
+      		t
+      	}
+      }
+      case None => sys.error("Not an Expression: " + str)
+      //case None => Branch(Symbol(""), List())
+   	}
   }
-
-  val lparen = Leaf(LParen, "(")
-  val rparen = Leaf(RParen, ")")
-  val plus   = Leaf(Plus  , "+")
-
-  def int2exp(n: Int): Tree = Fork(Exp, Leaf(Num, n.toString))
-
-  lazy val backward1: Tree => Tree = {
-    case Fork(Exp,
-      lhs @ Fork(Exp, _*), plus @ Leaf(Plus, _), rhs @ Fork(Exp, _*)
-    ) =>
-      Fork(Exp, List(lparen, lhs, plus, rhs, rparen) map backward1: _*)
-
-    case Fork(tag, children @ _*) =>
-      Fork(tag, children map backward1: _*)
-
-    case Leaf(tag, get) =>
-      Leaf(tag, get)
-  }
-
-  val ti1: Tree = Fork(Exp,
-    lparen,
-    Fork(Exp, lparen, int2exp(1), plus, int2exp(2), rparen),
-    plus,
-    Fork(Exp, lparen, int2exp(3), plus, int2exp(4), rparen),
-    rparen
-  )
-
-  val to1: Tree = Fork(Exp,
-    Fork(Exp, int2exp(1), plus, int2exp(2)),
-    plus,
-    Fork(Exp, int2exp(3), plus, int2exp(4))
-  )
-
-  assert(  belongs(ti1, input1 ))
-  assert(! belongs(ti1, output1))
-  assert(  belongs(to1, output1))
-  assert(! belongs(to1, input1 ))
-
-  assert(forward1 (ti1) == to1)
-  assert(backward1(to1) == ti1)
-
-  println("All assertions succeeded.")
 }

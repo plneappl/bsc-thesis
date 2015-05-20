@@ -1,0 +1,11 @@
+Doc -> ruleDef+
+
+ruleDef -> inPart, afterIn
+afterIn -> (outPart | (sequencePart, deletePart?))
+
+inPart -> "in:", ruleMatcher+
+outPart -> "out:", ruleMatcher+
+sequencePart -> "seq:", ruleMatcher+
+deletePart -> "del:", ruleMatcher+
+
+ruleMatcher -> NT "->" (NT (":" <int>)? | T (":" <int>)? | "|" | "<int>")+

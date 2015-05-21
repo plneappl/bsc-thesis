@@ -624,9 +624,13 @@ between $R$ and $S$.
 
 \infrule
 {|r SIMR S_1 s Plus f_n|\andalso
-|s' SIM s|\andalso
+|s' SIMR s|\andalso
 |S_1prime f_1 s' SIM s_1|}
 {|S_1prime f_1 r SIM S_1 s_1 Plus f_n|}
+
+\infrule
+{|s' SIM s|}
+{|R_1 Plus s' SIMR s|}
 
 
 The relation $\sim\circ\sim^{-1}$ is obviously reflexive and

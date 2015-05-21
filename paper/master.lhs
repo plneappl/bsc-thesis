@@ -658,6 +658,18 @@ $\approx^*$? That way, we quotient the source and target
 datatypes into equivalence classes related by
 $\sim\circ\approx^*$.
 
+Some questions to ask about the relational interpretation of
+pattern synonyms:
+\begin{enumerate}
+\item Is the relation defined by a set of pattern synonyms always
+terminating?
+\item When given a value, can the computational interpretation of
+pattern synonyms always find another value relating to it?
+\item What pattern synonyms have efficient/optimizable
+computational interpretation?
+\end{enumerate}
+We should investigate Horn clauses to answer these questions.
+
 
 \section{Grammar transformation language}
 

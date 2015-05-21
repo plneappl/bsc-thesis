@@ -14,7 +14,7 @@
 % 11pt          To set in 11-point type instead of 9-point.
 % authoryear    To obtain author/year citation style instead of numeric.
 
-\usepackage{cleveref,pbox,amsmath,stmaryrd,verbatim}
+\usepackage{cleveref,pbox,amsmath,stmaryrd,verbatim,bcprules}
 \usepackage{caption,subcaption,float}
 \usepackage{tikz}
 \usetikzlibrary{shapes,arrows,decorations.markings}
@@ -575,10 +575,10 @@ generate the backward coercions, simply swap the left-hand-side
 and right-hand-side of the pattern synonyms and carry out steps
 2--4 on them. These are the flipped pattern synonyms:
 
-< pattern S_2 f_1                 =  S_1prime f_1 R_2
-< pattern S_1 (S_2 f_1) Plus f_2  =  S_1prime f_1 (S_2 f_2)
-< pattern S_1 (S_1prime f_1 s)    =  S_1prime f_1 (S_1 s Plus f_n)
-< pattern s :: S                  =  R_1 Plus s
+< pattern S_2 f_1                         =  S_1prime f_1 R_2
+< pattern S_1 (S_2 f_1) Plus f_2          =  S_1prime f_1 (S_2 f_2)
+< pattern S_1 (S_1prime f_1 s) Plus f_n   =  S_1prime f_1 (S_1 s Plus f_n)
+< pattern s :: S                          =  R_1 Plus s
 
 Below is the result of translating the flipped pattern synonyms.
 
@@ -605,6 +605,55 @@ enjoy some form of \emph{relational} reasoning (\cref{meta}).
 
 \section{Metatheory of recursive pattern synonyms}
 \label{meta}
+
+Pattern synonyms define a relation $\sim$ between two datatypes,
+described by a set of derivation rules. This is the relational
+interpretation of pattern synonyms. These are the rules for
+left-recursion elimination; we write $\sim$ for the relation
+between $S'$ and $S$, and we write $\sim_R$ for the relation
+between $R$ and $S$.
+
+%format SIM  = "\ensuremath\sim"
+%format SIMR = "\ensuremath{\sim_R}"
+
+\infrule{}{|S_1prime f_1 R_2  SIM S_2 f_1|}
+
+\infrule
+{|r SIMR S_2 f_2|}
+{|S_1prime f_1 r SIM S_1 (S_2 f_1) Plus f_2|}
+
+\infrule
+{|r SIMR S_1 s Plus f_n|\andalso
+|s' SIM s|\andalso
+|S_1prime f_1 s' SIM s_1|}
+{|S_1prime f_1 r SIM S_1 s_1 Plus f_n|}
+
+
+The relation $\sim\circ\sim^{-1}$ is obviously reflexive and
+symmetric, but it is not transitive. For the sake of a
+non-transitive example, consider the following pattern synonyms
+between natural numbers.
+
+< data Nat = Z | S Nat
+<
+< pattern x    =  S x
+< pattern S x  =  x
+
+Write $\approx$ for the relation $\sim\circ\sim^{-1}$. Then
+%format APPROX = "\ensuremath\approx"
+%format DOT    = "."
+
+< Z APPROX S (S Z) APPROX S (S (S (S Z))),
+
+but it is not true that
+
+< Z APPROX S (S (S (S Z))) DOT
+
+Maybe it is more intuitive to consider the transitive closure
+$\approx^*$? That way, we quotient the source and target
+datatypes into equivalence classes related by
+$\sim\circ\approx^*$.
+
 
 \section{Grammar transformation language}
 

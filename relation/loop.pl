@@ -1,5 +1,6 @@
 %% A copy of concret.pl with re-ordered inference rules
-%% to achieve nontermination
+%% to achieve nontermination. Iterative deepening to
+%% restore termination.
 %%
 %% RHS grammar (abstract syntax):
 %%
@@ -56,9 +57,44 @@ f2a(f5(N), a5(N)).
 %% | ?- c2a(X, a5(5)).
 %% <loops forever>
 
+%% | ?- iterative(c2a(X, a5(5)), 5).
+%% X = c2(s4(f6(c2(s4(f5(5)))))) ?
+%% yes
+
 %% | ?- c2a(X, a1(a3(a5(3), mul, a5(4)), add, a5(5))).
 %% <loops forever>
 
 %% | ?- c2a(c1(c2(s3(s4(f5(3)), mul, f5(4))), add, s4(f5(5))), Y).
 %% Y = a1(a3(a5(3),mul,a5(4)),add,a5(5)) ?
 %% yes
+
+%% iterative(c2a(X, a1(a3(a5(3), mul, a5(4)), add, a5(5))), 5).
+%% X = c1(c2(s3(s4(f5(3)),mul,f5(4))),add,s4(f6(c2(s4(f5(5)))))) ?
+%% yes
+
+%% Iterative-deepening
+%% copied from
+%% https://www.cpp.edu/~jrfisher/www/prolog_tutorial/3_3.html
+
+clause_tree(true,_,_) :- !.
+clause_tree(_,D,Limit) :- D > Limit,
+                          !,
+                          fail.  %% reached depth limit
+clause_tree((A,B),D,Limit) :- !,
+                              clause_tree(A,D,Limit),
+                              clause_tree(B,D,Limit).
+clause_tree(A,_,_) :- predicate_property(A,built_in),
+                      !,
+                      call(A).
+clause_tree(A,D,Limit) :- clause(A,B),
+                          D1 is D+1,
+                          clause_tree(B,D1,Limit).
+
+iterative(G,D) :- clause_tree(G,0,D).
+iterative(G,D) :- write('limit='),
+                            write(D),
+                            write('(Hit Enter to Continue.)'),
+                            get0(C),
+                            ( C == 10 ->
+                                 D1 is D + 5,
+                                 iterative(G,D1)  ).

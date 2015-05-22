@@ -661,14 +661,27 @@ $\sim\circ\approx^*$.
 Some questions to ask about the relational interpretation of
 pattern synonyms:
 \begin{enumerate}
-\item Is the relation defined by a set of pattern synonyms always
-terminating?
+\item Is the relation defined by a set of pattern synonyms
+decidable?
 \item When given a value, can the computational interpretation of
-pattern synonyms always find another value relating to it?
+pattern synonyms always find another value relating to it, if
+exists?
 \item What pattern synonyms have efficient/optimizable
 computational interpretation?
+\item For grammar transformations, we don't need the two
+transformations be left- or right-inverse of each other. It
+suffices if the transformations are \emph{applicable
+enough}---optimally, they are applicable on all trees of the
+correct type. In other words, the relation defined by pattern
+synonyms should be left- and right-surjective. Is there some way
+to verify surjectivity? Is it decidable?
 \end{enumerate}
-We should investigate Horn clauses to answer these questions.
+The first 3 questions are related to Horn clauses. The last
+question is asking the computer to prove an implication:
+
+%format exists = "\ensuremath\exists"
+
+> isSyntaxTree(T, grammar) -> exists S DOT related(S, T)
 
 
 \section{Grammar transformation language}

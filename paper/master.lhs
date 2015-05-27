@@ -668,20 +668,24 @@ pattern synonyms always find another value relating to it, if
 exists?
 \item What pattern synonyms have efficient/optimizable
 computational interpretation?
-\item For grammar transformations, we don't need the two
-transformations be left- or right-inverse of each other. It
-suffices if the transformations are \emph{applicable
+\item Grammar transformations may want to guarantee that their
+syntax tree
+transformations are \emph{applicable
 enough}---optimally, they are applicable on all trees of the
 correct type. In other words, the relation defined by pattern
 synonyms should be left- and right-surjective. Is there some way
 to verify surjectivity? Is it decidable?
+\item Grammar transformations may want to guarantee that the
+syntax tree transformations they produce for every grammar are
+left- or right-inverse of each other. To support that, we need a
+proof framework for the injectivity of relations.
 \end{enumerate}
-The first 3 questions are related to Horn clauses. The last
+Questions 1--3 are related to Horn clauses. Question~4
 question is asking the computer to prove an implication:
 
 %format exists = "\ensuremath\exists"
 
-> isSyntaxTree(T, grammar) -> exists S DOT related(S, T)
+< isSyntaxTree(T, grammar) -> exists S DOT related(S, T)
 
 
 \section{Grammar transformation language}

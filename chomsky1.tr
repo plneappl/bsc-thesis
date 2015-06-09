@@ -1,0 +1,21 @@
+start:
+S0
+in:
+A -> B +:1 A | B
+seq: 
+A -> B P:1 A | B
+S0 -> A:0
+P -> +:1
+
+in:
+B -> C *:1 B | C
+seq:
+B -> C M:1 B | C
+M -> *:1
+
+in:
+C -> [:1 A ]:2 | <int>
+seq:
+C -> LK:1 A RK:2 | <int>
+LK -> [:1
+RK -> ]:2

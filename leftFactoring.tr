@@ -1,0 +1,14 @@
+start: 
+A
+in:
+A -> B:1 C:2 | B:1 D:3
+D -> d
+out:
+A -> B:1 A1
+A1 -> C:2 | D:3
+D -> d
+
+in:
+B -> b
+out:
+B -> b

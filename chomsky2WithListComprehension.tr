@@ -1,0 +1,7 @@
+in:
+A0 -> [Ai | i <- 1 to n]
+out:
+A0 -> A1 A2'
+[Ai' -> A(i+1) A(i+2)' | i <- 2 to n-3]
+A(n-1)' -> A(n-1) An
+

@@ -1,17 +1,17 @@
 start:
 D
 in:
-A -> B:1 + A:2 | B
+A -> B:1 "+" A:2 | B
 out: 
-D -> D:1 + D:2
+D -> D:1 "+" D:2
 
 in:
-B -> C:1 * B:2 | C
+B -> C:1 "*" B:2 | C
 out:
-D -> D:1 * D:2
+D -> D:1 "*" D:2
 
 in:
-C -> [ A ] | <int>:1
+C -> "[" A "]" | <int>:1
 out:
 D -> <int>:1
 

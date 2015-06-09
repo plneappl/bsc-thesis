@@ -41,9 +41,13 @@ object Transform {
 		override def toString = name +  (if(tag != -1) ":" + tag else "")
 		def copy(t: Int) = NonterminalMatcher(name, t)
 	}
-	case class TerminalMatcher(matches: String, tag: Int) extends TransformerAtom {
-		override def toString = if(tag >= 0) matches + ":" + tag else matches
-		def copy(t: Int) = TerminalMatcher(matches, t)
+	case class TerminalMatcher(name: String, tag: Int) extends TransformerAtom {
+		override def toString = if(tag >= 0) name + ":" + tag else name
+		def copy(t: Int) = TerminalMatcher(name, t)
+	}
+	case class LiteralMatcher(matches: String, tag: Int) extends TransformerAtom {
+		override def toString = if(tag >= 0) s""""$matches":$tag""" else s""""$matches""""               //"//again, for syntax highlighting
+		def copy(t: Int) = LiteralMatcher(matches, t)
 	}
 	case class IntegerMatcher(tag: Int) extends TransformerAtom {
 		override def toString = "<int>:" + tag
@@ -73,22 +77,22 @@ object Transform {
 	//C to A: take C -> C + S, C -> S and produce A -> A + A
 	val transformCtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", 1), TerminalMatcher("+", 2), NonterminalMatcher("B", 3))),
+			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", 1), LiteralMatcher("+", 2), NonterminalMatcher("B", 3))),
 			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", -1)))
 		),
 		List(
-			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), TerminalMatcher("+", 2), NonterminalMatcher("A", 3)))
+			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), LiteralMatcher("+", 2), NonterminalMatcher("A", 3)))
 		)
 	)
 	
 	//S to A: take S -> S * F, S -> F and produce A -> A * A
 	val transformStoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", 1), TerminalMatcher("*", 2), NonterminalMatcher("C", 3))),
+			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", 1), LiteralMatcher("*", 2), NonterminalMatcher("C", 3))),
 			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", -1)))
 		),
 		List(
-			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), TerminalMatcher("*", 2), NonterminalMatcher("A", 3)))
+			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), LiteralMatcher("*", 2), NonterminalMatcher("A", 3)))
 		)
 	)
 
@@ -96,7 +100,7 @@ object Transform {
 	//F to A: take F -> [ C ], F -> int and produce A -> int
 	val transformFtoA = TransformerRule(
 		List(
-			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(TerminalMatcher("[", -1), NonterminalMatcher("B", -1), TerminalMatcher("]", -1))),
+			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(LiteralMatcher("[", -1), NonterminalMatcher("B", -1), LiteralMatcher("]", -1))),
 			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(IntegerMatcher(1)))	
 		),
 		List(
@@ -108,7 +112,7 @@ object Transform {
 	type SymbolTable = Map[String, Symbol]
 	
 	//insert unknown symbols and check known for equality, fail if not equal
-	def checkSymbolTable(st: SymbolTable, sym: Symbol, name: String): SymbolTable = {
+	def checkSymbolTable(st: SymbolTable, name: String, sym: Symbol): SymbolTable = {
 		st.get(name) match {
 			case Some(sym2) if(sym2 == sym) => st
 			case None => st + ((name, sym))
@@ -116,11 +120,12 @@ object Transform {
 		
 	//match a grammar rule with a matcher one atom at a time	
 	def matches(st: SymbolTable, grammarRule: GrammarRule, matcher: GrammarRuleMatcher): Option[SymbolTable] = if(grammarRule.rhs.size == matcher.rhs.size) try {
-		var symbolTable = checkSymbolTable(st, grammarRule.lhs.sym, matcher.lhs.name)
+		var symbolTable = checkSymbolTable(st, matcher.lhs.name, grammarRule.lhs.sym)
 		for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) {
 			(ga, ma) match {
-				case (Nonterminal(sym), NonterminalMatcher(id, _)) => symbolTable = checkSymbolTable(symbolTable, sym, id)
-				case (Terminal(str1), TerminalMatcher(str2, _))	if (str1 == str2) => { }
+				case (Nonterminal(sym), NonterminalMatcher(id, _)) => symbolTable = checkSymbolTable(symbolTable, id, sym)
+				case (Terminal(str1), TerminalMatcher(id, _)) => symbolTable = checkSymbolTable(symbolTable, id, Symbol(str1))
+				case (Terminal(str1), LiteralMatcher(str2, _))	if (str1 == str2) => { }
 				case (IntegerTerminal, IntegerMatcher(_)) => {}
 				case x => {return None}
 		}}
@@ -195,7 +200,9 @@ object Transform {
 				
 				(st2, Nonterminal(st2(id)))
 			}
-			case TerminalMatcher(str, _) => (st, Terminal(str))
+			case TerminalMatcher(id, _) => (st, Terminal(st(id).name))
+
+			case LiteralMatcher(str, _) => (st, Terminal(str))
 			case IntegerMatcher(_) => (st, IntegerTerminal)
 		}
 	}
@@ -342,7 +349,8 @@ object Transform {
 	
 	def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
 			case NonterminalMatcher(id, tag) => TypedPatternVariable(tag, symbolTable(id))
-			case TerminalMatcher(m, tag) => PatternTerminal(tag, m)
+			case LiteralMatcher(m, tag) => PatternTerminal(tag, m)
+			case TerminalMatcher(id, tag) => PatternTerminal(tag, symbolTable(id).name)
 			case IntegerMatcher(tag) => PatternTerminal(tag, "<int>")
 		}
 	

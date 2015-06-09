@@ -19,4 +19,6 @@ patterns:
   match: '(<int>)|([0-9]+)'
 - name: keyword.operator
   match: '[:\|]'
+- name: string.quoted
+  match: '".*"'
 ...

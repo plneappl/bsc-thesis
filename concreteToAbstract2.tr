@@ -1,0 +1,14 @@
+start:
+D
+in:
+A -> B:1 t1 A:2 | B
+out: 
+D -> D:1 t1 D:2
+
+in:
+C -> "[" A "]" | <int>:1
+out:
+D -> <int>:1
+
+
+

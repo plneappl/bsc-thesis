@@ -6,20 +6,21 @@ object ReadableSyntaxGrammar {
 	val List(start, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom) = 
 		List('start, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom).map(Nonterminal)
 	
-	val t_start				= Terminal("""start:"""              )
-	val t_in          = Regex(   """in:\s*[\n\r]{1,2}"""   )
-	val t_out         = Regex(   """out:\s*[\n\r]{1,2}"""  )
-	val t_seq         = Regex(   """seq:\s*[\n\r]{1,2}"""  )
-	val t_rightArrow  = Terminal("""->"""                  )
-	val t_colon       = Terminal(""":"""                   )
-	val t_pipe        = Terminal("""|"""                   )
-	val nt            = Regex(   """[A-Z][A-Za-z0-9]*"""   )
-	val term          = Regex(   """[^A-Z|<:\s][^|<:\s]*""")
-	val t_int         = Terminal("""<int>"""               )
-	val t_optSpace    = Regex(   """ *"""                  )
-	val t_space       = Regex(   """ +"""                  )
-	val t_newLines		= Regex(   """[\s\r\n]+"""           )
-	val t_optNewLines = Regex(   """[\s\r\n]*"""           )
+	val t_start				= Terminal("""start:"""                )
+	val t_in          = Regex(   """in:\s*[\n\r]{1,2}"""     )
+	val t_out         = Regex(   """out:\s*[\n\r]{1,2}"""    )
+	val t_seq         = Regex(   """seq:\s*[\n\r]{1,2}"""    )
+	val t_rightArrow  = Terminal("""->"""                    )
+	val t_colon       = Terminal(""":"""                     )
+	val t_pipe        = Terminal("""|"""                     )
+	val nt            = Regex(   """[A-Z][A-Za-z0-9]*"""     )
+	val literal       = Regex(   """"[^A-Z|<:\s][^|<:\s]*"""")                   //")//this is so my syntax highlighting works
+	val term		   		= Regex(   """[a-z][A-Za-z0-9]*"""     )
+	val t_int         = Terminal("""<int>"""                 )
+	val t_optSpace    = Regex(   """ *"""                    )
+	val t_space       = Regex(   """ +"""                    )
+	val t_newLines		= Regex(   """[\s\r\n]+"""             )
+	val t_optNewLines = Regex(   """[\s\r\n]*"""             )
 	
 	val rules = (List(
 		GrammarRule(start       , List(t_optNewLines, t_start, t_newLines, nt, t_newLines, doc  ), 0),
@@ -37,6 +38,8 @@ object ReadableSyntaxGrammar {
 		GrammarRule(rhs         , List(rhsAtom                                                  ), 0),                                      
 		GrammarRule(rhsAtom     , List(nt,   t_colon, IntegerTerminal                           ), 0),                             
 		GrammarRule(rhsAtom     , List(nt                                                       ), 0),                               
+		GrammarRule(rhsAtom     , List(literal, t_colon, IntegerTerminal                        ), 0),                                                                      
+		GrammarRule(rhsAtom     , List(literal                                                  ), 0),                                
 		GrammarRule(rhsAtom     , List(term, t_colon, IntegerTerminal                           ), 0),                                                                      
 		GrammarRule(rhsAtom     , List(term                                                     ), 0),                                                            
 		GrammarRule(rhsAtom     , List(t_int, t_colon, IntegerTerminal                          ), 0),                                                            
@@ -71,10 +74,10 @@ object ReadableSyntaxGrammar {
 			x => TransformerRule(x.from.map(splitMatcher).flatten, x.to.map(splitMatcher).flatten)
 	)
 	def splitMatcher(t: GrammarRuleMatcher): List[GrammarRuleMatcher] = {
-		var (t1, t2) = t.rhs.span(x => !x.isInstanceOf[TerminalMatcher] || x.asInstanceOf[TerminalMatcher].matches != "|")
+		var (t1, t2) = t.rhs.span(x => !x.isInstanceOf[LiteralMatcher] || x.asInstanceOf[LiteralMatcher].matches != "|")
 		var res = List(GrammarRuleMatcher(t.lhs, t1))
 		while(t2 != Nil){
-			var (t11, t21) = t2.tail.span(x => !x.isInstanceOf[TerminalMatcher] || x.asInstanceOf[TerminalMatcher].matches != "|")
+			var (t11, t21) = t2.tail.span(x => !x.isInstanceOf[LiteralMatcher] || x.asInstanceOf[LiteralMatcher].matches != "|")
 			t2 = t21
 			res = GrammarRuleMatcher(t.lhs, t11) :: res
 		}
@@ -120,13 +123,15 @@ object ReadableSyntaxGrammar {
 	}
 	
 	def LeafStringToTransformerAtom(i: Int): String => Option[TransformerAtom] = t => {
-		val ntpattern = """([A-Z][A-Za-z0-9]*)""".r
-		val termpattern = """([^A-Z|<:\s][^|<:\s]*)""".r
+		val ntpattern =      ("(" + nt.sym + ")").r
+		val literalpattern = ("(" + literal.sym + ")").r
+		val termpattern =    ("(" + term.sym + ")").r
 		t match {
 			case ntpattern(nt) => Some(NonterminalMatcher(nt, i))
+			case literalpattern(term) => Some(LiteralMatcher(term.tail.init, i))
 			case termpattern(term) => Some(TerminalMatcher(term, i))
 			case "<int>" => Some(IntegerMatcher(i))
-			case "|" => Some(TerminalMatcher("|", -1))
+			case "|" => Some(LiteralMatcher("|", -1))
 			case _ => None
 		}
 	}

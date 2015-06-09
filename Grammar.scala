@@ -1,13 +1,13 @@
 object Grammar {
 	sealed trait GrammarAtom
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
-		override def toString = sym.toString.tail
+		override def toString = sym.name
 	}
 	case class Terminal(sym: String) extends GrammarAtom{
 		override def toString = "\"" + sym + "\""
 	}
 	case class Regex(sym: String) extends GrammarAtom{
-		override def toString = "\"" + sym + "\""
+		override def toString = "\"" + sym + "\".r"
 	}
 	case object IntegerTerminal extends GrammarAtom{
 		override def toString = "<int>"
@@ -15,6 +15,7 @@ object Grammar {
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int){
 		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
+		var matched = false
 	}
 	type GrammarRules = List[GrammarRule]
 	type RHS = List[GrammarAtom]

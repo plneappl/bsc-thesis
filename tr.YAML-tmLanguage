@@ -1,0 +1,22 @@
+# [PackageDev] target_format: plist, ext: tmLanguage
+# needs AAAPackageDev
+---
+name: Grammar Transformer
+scopeName: source.grammar_trans
+fileTypes: [tr]
+uuid: 1856da82-0b73-471e-86bd-66bcd33fbc25
+
+patterns:
+- name: keyword.section
+  match: '(in:)|(out:)|(seq:)|(del:)|(start:)'
+- name: variable.parameter
+  match: '([A-Z][A-Za-z0-9]*)'
+- name: comment.line
+  match: '->'
+- name: constant.character
+  match: '[a-z][^\s]*'
+- name: constant.numeric
+  match: '(<int>)|([0-9]+)'
+- name: keyword.operator
+  match: '[:\|]'
+...

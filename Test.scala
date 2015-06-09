@@ -14,10 +14,10 @@ object Test{
 		))
 	
 	def main(args: Array[String]) = {
-		testTransformer(g1)("concreteToAbstract.tr")
-		testTransformer(g1)("concreteToAbstract2.tr")
+		//testTransformer(g1)("concreteToAbstract.tr")
+		//testTransformer(g1)("concreteToAbstract2.tr")
 
-		//testTransformer(g1)("chomsky1.tr")
+		testTransformer(g1)("chomsky1.tr")
 		//testTransformer(g1)("chomsky2.tr")
 
 		//testTransformer(g1)("inlining.tr")

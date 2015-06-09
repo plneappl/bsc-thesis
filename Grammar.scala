@@ -15,6 +15,7 @@ object Grammar {
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int){
 		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
+		override def toString = asString("", 0)
 		var matched = false
 	}
 	type GrammarRules = List[GrammarRule]

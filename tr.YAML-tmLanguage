@@ -12,7 +12,7 @@ patterns:
 - name: variable.parameter
   match: '([A-Z][A-Za-z0-9]*)'
 - name: comment.line
-  match: '->'
+  match: '(->)|(//.*)'
 - name: constant.character
   match: '[a-z][^\s:\|]*'
 - name: constant.numeric

@@ -79,6 +79,7 @@ object Grammar {
     val Pattern = s"(?s)($regex)(.*)".r      	
     code match {
       case Pattern(groups @ _*) => {
+      	//println("R: matched:       '" + groups.head + "'")
       	Some((groups.head, groups.last))
       }
       case otherwise => {

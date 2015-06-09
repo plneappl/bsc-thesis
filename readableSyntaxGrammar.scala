@@ -6,21 +6,21 @@ object ReadableSyntaxGrammar {
 	val List(start, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom) = 
 		List('start, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom).map(Nonterminal)
 	
-	val t_start				= Terminal("""start:"""                )
-	val t_in          = Regex(   """in:\s*[\n\r]{1,2}"""     )
-	val t_out         = Regex(   """out:\s*[\n\r]{1,2}"""    )
-	val t_seq         = Regex(   """seq:\s*[\n\r]{1,2}"""    )
-	val t_rightArrow  = Terminal("""->"""                    )
-	val t_colon       = Terminal(""":"""                     )
-	val t_pipe        = Terminal("""|"""                     )
-	val nt            = Regex(   """[A-Z][A-Za-z0-9]*"""     )
-	val literal       = Regex(   """"[^A-Z|<:\s][^|<:\s]*"""")                   //")//this is so my syntax highlighting works
-	val term		   		= Regex(   """[a-z][A-Za-z0-9]*"""     )
-	val t_int         = Terminal("""<int>"""                 )
-	val t_optSpace    = Regex(   """ *"""                    )
-	val t_space       = Regex(   """ +"""                    )
-	val t_newLines		= Regex(   """[\s\r\n]+"""             )
-	val t_optNewLines = Regex(   """[\s\r\n]*"""             )
+	val t_start				= Terminal("""start:"""                  )
+	val t_in          = Regex(   """in:\s*[\n\r]{1,2}"""       )
+	val t_out         = Regex(   """out:\s*[\n\r]{1,2}"""      )
+	val t_seq         = Regex(   """seq:\s*[\n\r]{1,2}"""      )
+	val t_rightArrow  = Terminal("""->"""                      )
+	val t_colon       = Terminal(""":"""                       )
+	val t_pipe        = Terminal("""|"""                       )
+	val nt            = Regex(   """[A-Z][A-Za-z0-9]*"""       )
+	val literal       = Regex(   """"[^A-Z"|<:\s][^"|<:\s]*"""")                  //")//this is so my syntax highlighting works
+	val term		   		= Regex(   """[a-z][A-Za-z0-9]*"""       )
+	val t_int         = Terminal("""<int>"""                   )
+	val t_optSpace    = Regex(   """ *"""                      )
+	val t_space       = Regex(   """ +"""                      )
+	val t_newLines		= Regex(   """[\s\r\n]+"""               )
+	val t_optNewLines = Regex(   """[\s\r\n]*"""               )
 	
 	val rules = (List(
 		GrammarRule(start       , List(t_optNewLines, t_start, t_newLines, nt, t_newLines, doc  ), 0),
@@ -92,17 +92,36 @@ object ReadableSyntaxGrammar {
 			)
 			if(out.asInstanceOf[Branch].childs(0).asInstanceOf[LeafString].str.startsWith("seq:")){
 				val usedTags = (res.from ++ res.to).map(r => getUsedTags(r.rhs)).flatten
-				res = TransformerRule(
-					res.from.map(rule => rule.copy(rhs = (rule.rhs zip (1 to (rule.rhs.length + usedTags.length)).diff(usedTags)).map(x => if(x._1.tag < 0) x._1.copy(x._2) else x._1))),
-					  res.to.map(rule => rule.copy(rhs = (rule.rhs zip (1 to (rule.rhs.length + usedTags.length)).diff(usedTags)).map(x => if(x._1.tag < 0) x._1.copy(x._2) else x._1)))
-				)
+				var i = 1
+				var from = for(rule <- res.from) yield {
+					rule.copy(rhs = for(atom <- rule.rhs) yield {
+						if(atom.tag < 0){
+							i += 1
+							while(usedTags.contains(i)) i += 1
+							atom.copy(i)
+						}
+						else atom
+					})
+				}
+				i = 1
+				var to = for(rule <- res.to) yield {
+					rule.copy(rhs = for(atom <- rule.rhs) yield {
+						if(atom.tag < 0){
+							i += 1
+							while(usedTags.contains(i)) i += 1
+							atom.copy(i)
+						}
+						else atom
+					})
+				}
+				res = TransformerRule(from, to)
 			}
 			Some(res)
 		}
 		case _ => None
 	}
 	
-	val getUsedTags: List[TransformerAtom] => List[Int] = x => x.map(y => {if(y.tag > 0) Some(y.tag) else None}).flatten
+	val getUsedTags: List[TransformerAtom] => Set[Int] = x => x.map(y => {if(y.tag > 0) Some(y.tag) else None}).flatten.toSet
 	
 	def ruleMatcherToGrammarRuleMatcher: SyntaxTreeRecurser[GrammarRuleMatcher] = t => { 
 		t match {

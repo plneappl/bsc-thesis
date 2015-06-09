@@ -111,6 +111,7 @@ object Transform {
 	
 	//NonterminalMatchers can identify themselves with any symbol, this stores the identification while transforming
 	type SymbolTable = Map[String, Symbol]
+	type UsedSymbols = Set[Symbol]
 	
 	//insert unknown symbols and check known for equality, fail if not equal
 	def checkSymbolTable(st: SymbolTable, name: String, sym: Symbol): SymbolTable = {
@@ -162,15 +163,19 @@ object Transform {
 		//produce the out rules
 		var out = List[(GrammarRules, SymbolTable, GrammarRules)]()
 		
+		var usedSymbols = Set[Symbol]()
 		for((st, gRules) <- matchedRules){
 			var symbolTable = st
+			usedSymbols ++= st.values
 			var newRules: GrammarRules = List()
 			for(rule <- transformerRules.to){
-				val (nst, r) = makeOutRule(symbolTable, rule)
+				
+				val (nst, nus, r) = makeOutRule(symbolTable, rule, usedSymbols)
 				symbolTable = nst
 				newRules = r :: newRules
-				
+				usedSymbols = nus
 			}
+			
 			out = (gRules, symbolTable, newRules) :: out
 			
 			
@@ -180,45 +185,46 @@ object Transform {
 	}
 	
 	//make a new rule by applying the TransformerAtoms one by one, steadily updating the SymbolTable in case a new Nonterminal is introduced
-	def makeOutRule(st: SymbolTable, prod: GrammarRuleMatcher): (SymbolTable, GrammarRule) = {
-		var (st2, lhs) = applyMatcher(st, prod.lhs)
+	def makeOutRule(st: SymbolTable, prod: GrammarRuleMatcher, usedSymbols: Set[Symbol]): (SymbolTable, UsedSymbols, GrammarRule) = {
+		var (st2, us2, lhs) = applyMatcher(st, prod.lhs, usedSymbols)
 		var rhs = List[GrammarAtom]()
 		for(atom <- prod.rhs){
-			val (st3, at) = applyMatcher(st2, atom)
+			val (st3, us3, at) = applyMatcher(st2, atom, us2)
 			//prepend for speed, then reverse at the end
 			rhs = at +: rhs
 			st2 = st3
+			us2 = us3
 		}
 		rhs = rhs.reverse
 		
-		(st2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs, -1))
+		(st2, us2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs, -1))
 	}
 	
 	//produce a GrammarAtom from a TransformerAtom by looking up in the SymbolTable and adding new IDs
-	def applyMatcher(st: SymbolTable, a: TransformerAtom): (SymbolTable, GrammarAtom) = {
+	def applyMatcher(st: SymbolTable, a: TransformerAtom, usedSymbols: Set[Symbol]): (SymbolTable, UsedSymbols, GrammarAtom) = {
 		 a match {
 			case NonterminalMatcher(id, _) => {
-				val st2 = extendSymbolTable(st, id)
+				val (st2, us2) = extendSymbolTable(st, id, usedSymbols)
 				
-				(st2, Nonterminal(st2(id)))
+				(st2, us2, Nonterminal(st2(id)))
 			}
-			case TerminalMatcher(id, _) => (st, Terminal(st(id).name))
+			case TerminalMatcher(id, _) => (st, usedSymbols, Terminal(st(id).name))
 
-			case LiteralMatcher(str, _) => (st, Terminal(str))
-			case IntegerMatcher(_) => (st, IntegerTerminal)
+			case LiteralMatcher(str, _) => (st, usedSymbols, Terminal(str))
+			case IntegerMatcher(_) => (st, usedSymbols, IntegerTerminal)
 		}
 	}
 	
 	//insert a new Symbol with the target ID
-	def extendSymbolTable(st: SymbolTable, name: String): SymbolTable = {
+	def extendSymbolTable(st: SymbolTable, name: String, usedSymbols: Set[Symbol]): (SymbolTable, UsedSymbols) = {
 		
-		if(st.isDefinedAt(name)) return st
-		if(!st.values.toList.contains(Symbol(name))) return st + ((name, Symbol(name)))
+		if(st.isDefinedAt(name)) return (st, usedSymbols)
+		if(!st.values.toList.contains(Symbol(name)) && !usedSymbols.contains(Symbol(name))) return (st + ((name, Symbol(name))), usedSymbols + Symbol(name))
 		var next = "A"
-		while(st.values.toList.contains(Symbol(next))){
+		while(st.values.toList.contains(Symbol(next)) || usedSymbols.contains(Symbol(next))){
 			next = nextLexicographic(next)
 		}
-		st + ((name, Symbol(next)))
+		(st + ((name, Symbol(next))), usedSymbols + Symbol(next))
 	}
 	
 	def getNthVariableName(n: Int): String = {

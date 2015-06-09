@@ -14,11 +14,11 @@ patterns:
 - name: comment.line
   match: '->'
 - name: constant.character
-  match: '[a-z][^\s]*'
+  match: '[a-z][^\s:\|]*'
 - name: constant.numeric
   match: '(<int>)|([0-9]+)'
 - name: keyword.operator
   match: '[:\|]'
 - name: string.quoted
-  match: '".*"'
+  match: '"[^"]*"'
 ...

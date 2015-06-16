@@ -416,11 +416,11 @@ object Transform {
   }
   
   def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
-      case NonterminalMatcher(id, tag, rec) => TypedPatternVariable(tag, symbolTable(id), rec)
-      case LiteralMatcher(m, tag) => PatternTerminal(tag, m)
-      case TerminalMatcher(id, tag) => PatternTerminal(tag, symbolTable(id).name)
-      case IntegerMatcher(tag) => PatternTerminal(tag, "<int>")
-    }
+    case NonterminalMatcher(id, tag, rec) => TypedPatternVariable(tag, symbolTable(id), rec)
+    case LiteralMatcher(m, tag) => PatternTerminal(tag, m)
+    case TerminalMatcher(id, tag) => PatternTerminal(tag, symbolTable(id).name)
+    case IntegerMatcher(tag) => PatternTerminal(tag, "<int>")
+  }
   
   
   

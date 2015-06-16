@@ -53,7 +53,7 @@ master.tex: master.lhs DirtyWork.tex
 	$(latex) master $(REDIR)
 
 %.tex: %.hs
-	runHaskell $< > $@
+	runhaskell $< > $@
 
 .PRECIOUS: %.aux %.tex %.blg %.pdf
 

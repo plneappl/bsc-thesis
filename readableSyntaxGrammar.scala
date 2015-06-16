@@ -84,7 +84,7 @@ object ReadableSyntaxGrammar {
   def docToTransformerRules(t: SyntaxTree): GrammarTransformer = t match {
     case Branch('start, List(_, _, _, Branch('nt, List(LeafString(nt))), _, doc)) => { 
       GrammarTransformer(
-        NonterminalMatcher(nt, ""), 
+        NonterminalMatcher(nt, "", false), 
         splitRules(operateOnRRTree('ruleDef)(ruleDefsToTransformerRules)(doc))
       )
     }
@@ -147,7 +147,7 @@ object ReadableSyntaxGrammar {
     t match {
       case List(Branch('nt, List(nt)), _, _, _, rhs, _) => {
         Some(GrammarRuleMatcher(
-          NonterminalMatcher(nt.asInstanceOf[LeafString].str, ""), 
+          NonterminalMatcher(nt.asInstanceOf[LeafString].str, "", false), 
           operateOnRRTree('rhsAtom)(rhsAtomToTransformerAtom)(rhs)
         ))
       }
@@ -158,7 +158,7 @@ object ReadableSyntaxGrammar {
   
   def rhsAtomToTransformerAtom: SyntaxTreeRecurser[TransformerAtom] = t => t.head match {
     case Branch('recursive, list)  => handleRecursive(list) 
-    case Branch('nt       , list)  => handleNT(list)
+    case Branch('nt       , list)  => handleNT(false)(list)
     case Branch('term     , list)  => handleTerm(list)      
     case Branch('literal  , list)  => handleLiteral(list)
     case Branch('int      , list)  => handleInt(list)
@@ -167,17 +167,17 @@ object ReadableSyntaxGrammar {
   
   //GrammarRule(recursive   , List(t_recursive, t_rbrace, nt, t_lbrace                                    
   def handleRecursive: SyntaxTreeRecurser[TransformerAtom] = t => t match{
-    case List(_, _, Branch('nt, nt), _) => handleNT(nt)
+    case List(_, _, Branch('nt, nt), _) => handleNT(true)(nt)
     case _ => None
   }
 
   //GrammarRule(nt          , List(t_nt, identifier                                 
   //GrammarRule(nt          , List(t_nt                                                
-  def handleNT: SyntaxTreeRecurser[TransformerAtom] = t => {
+  def handleNT(rec: Boolean): SyntaxTreeRecurser[TransformerAtom] = t => {
     val ntpattern =      ("(" + t_nt.sym + ")").r
     t.head match {
       case LeafString(t1) => t1 match {
-        case ntpattern(nt) => handleIdentifier(NonterminalMatcher(nt, ""))(t.tail)
+        case ntpattern(nt) => handleIdentifier(NonterminalMatcher(nt, "", rec))(t.tail)
       }
       case _ => None
     }

@@ -1,0 +1,14 @@
+start:
+S
+in:
+S -> r(S:1) t:i F:j | F:j
+
+out:
+S1 -> F1:j t:i r(S1:1) | F1:j
+
+in: 
+A -> <int>
+seq:
+A -> <int>
+
+

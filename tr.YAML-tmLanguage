@@ -9,16 +9,18 @@ uuid: 1856da82-0b73-471e-86bd-66bcd33fbc25
 patterns:
 - name: keyword.section
   match: '(in:)|(out:)|(seq:)|(del:)|(start:)'
+- name: storage.type
+  match: '(r\()|(\))'
 - name: variable.parameter
-  match: '([A-Z][A-Za-z0-9]*)'
+  match: '[A-Z][A-Za-z0-9]*'
 - name: comment.line
   match: '(->)|(//.*)'
 - name: constant.character
-  match: '[a-z][^\s:\|]*'
+  match: '[a-z][A-Za-z0-9]*'
 - name: constant.numeric
-  match: '(<int>)|([0-9]+)'
+  match: '(<int>)|([0-9]+)|([a-z]+)'
 - name: keyword.operator
   match: '[:\|]'
 - name: string.quoted
-  match: '"[^"]*"'
+  match: '""([^A-Z"|<:\s][^"|<:\s]*)?""'
 ...

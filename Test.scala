@@ -3,21 +3,58 @@ object Test{
 	import sext._
 	import Grammar._
 	import ReadableSyntaxGrammar.{grammar => grammarSyntaxDef, _}
+	val c = Nonterminal('C)
+	val a = Nonterminal('A)
+	val s = Nonterminal('S)
+	val f = Nonterminal('F)
 	
+	val leftBrace  = Terminal("[")
+	val rightBrace = Terminal("]")
+	val plus       = Terminal("+")
+	val mul        = Terminal("*")
+	
+	//concrete grammar
+	val rules1 = List(
+		GrammarRule(c, List(s, plus, c), 1),
+		GrammarRule(c, List(s), 2),
+		GrammarRule(s, List(f, mul, s), 3),
+		GrammarRule(s, List(f), 4),
+		GrammarRule(f, List(IntegerTerminal), 5),
+		GrammarRule(f, List(leftBrace, c, rightBrace), 6)
+		)
+	val rulesLR = List(
+		GrammarRule(s, List(s, plus, f), 1),
+		GrammarRule(s, List(f), 2),
+		GrammarRule(f, List(IntegerTerminal), 3)
+		)
+	
+	val g1 = Grammar(c, rules1)
+	val gLR = Grammar(s, rulesLR)
+	
+	//abstract grammar
+	val rules2 = List(
+		GrammarRule(a, List(a, plus, a), 1),
+		GrammarRule(a, List(a, mul, a), 2),
+		GrammarRule(a, List(IntegerTerminal), 3)
+		)
+	val g2 = Grammar(a, rules2)
+		
+
 	val notLeftFactored: Grammar = Grammar(
-		Nonterminal('A),
+		a,
 		List(
-			GrammarRule(Nonterminal('A), List(Nonterminal('B), Nonterminal('A)), 1),
-			GrammarRule(Nonterminal('A), List(Nonterminal('B), Nonterminal('D)), 2),
+			GrammarRule(a, List(Nonterminal('B), a), 1),
+			GrammarRule(a, List(Nonterminal('B), Nonterminal('D)), 2),
 			GrammarRule(Nonterminal('D), List(Terminal("d")), 3),
 			GrammarRule(Nonterminal('B), List(Terminal("b")), 4)
 		))
 	
 	def main(args: Array[String]) = {
+		testTransformer(gLR)("eliminateLeftRecursion.tr")
 		//testTransformer(g1)("concreteToAbstract.tr")
 		//testTransformer(g1)("concreteToAbstract2.tr")
 
-		testTransformer(g1)("chomsky1.tr")
+		//testTransformer(g1)("chomsky1.tr")
 		//testTransformer(g1)("chomsky2.tr")
 
 		//testTransformer(g1)("inlining.tr")
@@ -40,20 +77,6 @@ object Test{
 		println("------------------")
 	}
 
-	def main1(args: Array[String]) = {
-		println(g1)
-		println(concreteToAbstract)
-		val (newG, ps) = transformGrammar(concreteToAbstract)(g1)
-		println
-		println(grammarSyntaxDef)
-		ps.foreach(println)
-		println(ps.treeString)
-		//println((parseWithGrammar(g1)("5+6*6")).treeString)
-		val tr3 = getGrammarTransformer("readableSyntax1.tr")
-		
-		println(tr3)
-		println(tr3.rules)
-	}
 	
 	def main2(args: Array[String]) = {
 		val ch1 = getGrammarTransformer("chomsky1.tr")

@@ -4,55 +4,26 @@ object Transform {
 	import sext._
 	import collection.mutable.{ ListBuffer, HashMap, MultiMap, Set => MSet }
 	
-	val c = Nonterminal('C)
-	val a = Nonterminal('A)
-	val s = Nonterminal('S)
-	val f = Nonterminal('F)
 	
-	val leftBrace  = Terminal("[")
-	val rightBrace = Terminal("]")
-	val plus       = Terminal("+")
-	val mul        = Terminal("*")
-	
-	//concrete grammar
-	val rules1 = List(
-		GrammarRule(c, List(s, plus, c), 1),
-		GrammarRule(c, List(s), 2),
-		GrammarRule(s, List(f, mul, s), 3),
-		GrammarRule(s, List(f), 4),
-		GrammarRule(f, List(IntegerTerminal), 5),
-		GrammarRule(f, List(leftBrace, c, rightBrace), 6)
-		)
-	
-	val g1 = Grammar(c, rules1)
-	
-	//abstract grammar
-	val rules2 = List(
-		GrammarRule(a, List(a, plus, a), 1),
-		GrammarRule(a, List(a, mul, a), 2),
-		GrammarRule(a, List(IntegerTerminal), 3)
-		)
-	val g2 = Grammar(a, rules2)
-		
 	sealed abstract class TransformerAtom{
-		def tag: Int
-		def copy(t: Int): TransformerAtom
+		def tag: String
+		def copy(t: String): TransformerAtom
 	}
-	case class NonterminalMatcher(name: String, tag: Int) extends TransformerAtom {
-		override def toString = name +  (if(tag != -1) ":" + tag else "")
-		def copy(t: Int) = NonterminalMatcher(name, t)
+	case class NonterminalMatcher(name: String, tag: String) extends TransformerAtom {
+		override def toString = name +  (if(tag != "") ":" + tag else "")
+		def copy(t: String) = NonterminalMatcher(name, t)
 	}
-	case class TerminalMatcher(name: String, tag: Int) extends TransformerAtom {
-		override def toString = if(tag >= 0) name + ":" + tag else name
-		def copy(t: Int) = TerminalMatcher(name, t)
+	case class TerminalMatcher(name: String, tag: String) extends TransformerAtom {
+		override def toString = if(tag != "") name + ":" + tag else name
+		def copy(t: String) = TerminalMatcher(name, t)
 	}
-	case class LiteralMatcher(matches: String, tag: Int) extends TransformerAtom {
-		override def toString = if(tag >= 0) s""""$matches":$tag""" else s""""$matches""""               //"//again, for syntax highlighting
-		def copy(t: Int) = LiteralMatcher(matches, t)
+	case class LiteralMatcher(matches: String, tag: String) extends TransformerAtom {
+		override def toString = if(tag != "") s""""$matches":$tag""" else s""""$matches""""               //"//again, for syntax highlighting
+		def copy(t: String) = LiteralMatcher(matches, t)
 	}
-	case class IntegerMatcher(tag: Int) extends TransformerAtom {
+	case class IntegerMatcher(tag: String) extends TransformerAtom {
 		override def toString = "<int>:" + tag
-		def copy(t: Int) = IntegerMatcher(t)
+		def copy(t: String) = IntegerMatcher(t)
 	}
 	
 	type TransformerSequence = List[TransformerAtom] 
@@ -75,39 +46,7 @@ object Transform {
 			"\n"
 	}
 	
-	//C to A: take C -> C + S, C -> S and produce A -> A + A
-	val transformCtoA = TransformerRule(
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", 1), LiteralMatcher("+", 2), NonterminalMatcher("B", 3))),
-			GrammarRuleMatcher(NonterminalMatcher("B", 0), List(NonterminalMatcher("C", -1)))
-		),
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), LiteralMatcher("+", 2), NonterminalMatcher("A", 3)))
-		)
-	)
 	
-	//S to A: take S -> S * F, S -> F and produce A -> A * A
-	val transformStoA = TransformerRule(
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", 1), LiteralMatcher("*", 2), NonterminalMatcher("C", 3))),
-			GrammarRuleMatcher(NonterminalMatcher("C", 0), List(NonterminalMatcher("D", -1)))
-		),
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(NonterminalMatcher("A", 1), LiteralMatcher("*", 2), NonterminalMatcher("A", 3)))
-		)
-	)
-
-	
-	//F to A: take F -> [ C ], F -> int and produce A -> int
-	val transformFtoA = TransformerRule(
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(LiteralMatcher("[", -1), NonterminalMatcher("B", -1), LiteralMatcher("]", -1))),
-			GrammarRuleMatcher(NonterminalMatcher("D", 0), List(IntegerMatcher(1)))	
-		),
-		List(
-			GrammarRuleMatcher(NonterminalMatcher("A", 0), List(IntegerMatcher(1)))
-		)
-	)
 	
 	//NonterminalMatchers can identify themselves with any symbol, this stores the identification while transforming
 	type SymbolTable = Map[String, Symbol]
@@ -220,7 +159,7 @@ object Transform {
 		
 		if(st.isDefinedAt(name)) return (st, usedSymbols)
 		if(!st.values.toList.contains(Symbol(name)) && !usedSymbols.contains(Symbol(name))) return (st + ((name, Symbol(name))), usedSymbols + Symbol(name))
-		var next = "A"
+		var next = name
 		while(st.values.toList.contains(Symbol(next)) || usedSymbols.contains(Symbol(next))){
 			next = nextLexicographic(next)
 		}
@@ -245,6 +184,12 @@ object Transform {
 				if(incrementing && c == 'Z') {
 					res = 'A' + res
 				}
+				else if(incrementing && c == 'z') {
+					res = 'z' + res
+				}
+				else if(incrementing && c == '9') {
+					res = '0' + res
+				}
 				//increment
 				else if(incrementing){
 					res = ((c + 1).asInstanceOf[Char]) + res
@@ -260,6 +205,7 @@ object Transform {
 		}
 	}
 	
+
 	//to transform a Grammar, we take every transformRule and apply it, meanwhile updating the SymbolTable
 	def transformGrammar(transformer: GrammarTransformer)(grammar: Grammar): (Grammar, PatternSynonyms) = {
 		var outRules = List[GrammarRule]()
@@ -293,7 +239,6 @@ object Transform {
 		case Nil => (List[GrammarRule](), nextTag)
 	}
 	
-	def concreteToAbstract = GrammarTransformer(NonterminalMatcher("A", 0), List(transformFtoA, transformCtoA, transformStoA))	
 	
 	
 		
@@ -301,39 +246,39 @@ object Transform {
 		override def toString = lhs.toString + " = " + rhs.toString
 	}
 	type PatternSynonyms = List[PatternSynonym]
-	sealed trait PatternAtom{ def id: Int; def getIds: Set[Int] }
-	case class TypedPatternVariable(id: Int, typ: Symbol) extends PatternAtom{
+	sealed trait PatternAtom{ def id: String; def getIds: Set[String] }
+	case class TypedPatternVariable(id: String, typ: Symbol) extends PatternAtom{
 		override def toString = "(" + id + " :: " + typ.name + ")"
 		def getIds = Set(id)
 	}
-	case class PatternTerminal(id: Int, str: String) extends PatternAtom{
+	case class PatternTerminal(id: String, str: String) extends PatternAtom{
 		override def toString = "(" + id + " :: " + str + ")"
 		def getIds = Set(id)
 	}
 
 	case class TypedPattern(patternName: Int, patternContent: List[PatternAtom], typ: Symbol) extends PatternAtom {
-		def id = -1
+		def id = ""
 		def getIds = patternContent.map(_.getIds).fold(Set())((x, y) => x ++ y)
-		override def toString = "(" + typ.name + patternName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ.name + ")"
+		override def toString = "(" + typ.name + "_" + patternName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ.name + ")"
 	}
 	//Name as String
 	//case class TypedPattern(ruleName: String, patternContent: List[PatternAtom], typ: Symbol){
 	//	override def toString = ruleName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ
 	//}
 	
-	type SeenTags = MultiMap[Int, TransformerSequence]
-	def newSeenTags():SeenTags = new HashMap[Int, MSet[TransformerSequence]] with MultiMap[Int, TransformerSequence]
+	type SeenTags = MultiMap[String, TransformerSequence]
+	def newSeenTags():SeenTags = new HashMap[String, MSet[TransformerSequence]] with MultiMap[String, TransformerSequence]
 	def addTags(rule: TransformerSequence)(to: SeenTags): SeenTags = {		
 		var res = to
-		rule.map(_.tag).filter(_ > -1).foreach(x => res.addBinding(x, rule))
+		rule.map(_.tag).filter(_ != "").foreach(x => res.addBinding(x, rule))
 		res
 	}	
 	
 	
 	def pairs(max1: Int, max2: Int) = for(i <- (1 to (max1 * max2)).view; j1 <- (1 to max1).view; if(i - j1 >= 1 && i - j1 <= max2)) yield (j1, i - j1)
 	
-	def getTags(p: TypedPattern): Set[Int] = {
-		p.getIds.filter(_ > -1).toSet[Int]
+	def getTags(p: TypedPattern): Set[String] = {
+		p.getIds.filter(_ != "").toSet[String]
 	}
 	
 	//produce all PatternSynonyms where all variables on the right side get resolved by the left side
@@ -407,8 +352,8 @@ object Transform {
 	def matching(from: GrammarRuleMatcher, to: GrammarRuleMatcher): Boolean = {
 		var any = false
 		for(toAtom <- to.rhs){
-			if(toAtom.tag >= 0 && !(names(from)(toAtom))) return false
-			else if(toAtom.tag >= 0) any = true
+			if(toAtom.tag != "" && !(names(from)(toAtom))) return false
+			else if(toAtom.tag != "") any = true
 		}
 		return any
 	}

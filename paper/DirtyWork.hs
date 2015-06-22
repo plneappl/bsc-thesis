@@ -26,7 +26,7 @@ subscripts =
 
 subscribedNames :: [String]
 subscribedNames =
-  words "A B C D E F f field from Record R S s T t to U V W X Y Z"
+  words "A B C D E F f field from Record R S s T t to U V W X Y Z x y z"
 
 formatKeyword :: String -> String
 formatKeyword x = "\"\\KEYWORD{" ++ x ++ "}\""

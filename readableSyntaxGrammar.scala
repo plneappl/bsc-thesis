@@ -186,10 +186,14 @@ object ReadableSyntaxGrammar {
   //GrammarRule(literal     , List(t_literal, identifier                                                                      
   //GrammarRule(literal     , List(t_literal                                            
   def handleLiteral: SyntaxTreeRecurser[TransformerAtom] = t => {
-    val literalpattern = ("(" + t_literal.sym + ")").r
+    val literalpattern = t_literal.sym.r
     t.head match {
-      case LeafString(t1) => t1 match {
-        case literalpattern(lit) => handleIdentifier(LiteralMatcher(lit, ""))(t.tail)
+      case LeafString(t1) => {
+        println(t1)
+        println(literalpattern)
+        t1 match {
+          case literalpattern(lit) => handleIdentifier(LiteralMatcher(lit, ""))(t.tail)
+        }
       }
       case _ => None
     }

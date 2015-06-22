@@ -74,9 +74,7 @@ object Transform {
   } catch { case e: Throwable => None }
   else None
   
-  def lists[T1](n: Int)(l: List[T1]) = l.combinations(n).map(_.permutations).flatten
-  def select[T1, T2](n: Int)(l: List[T1])(f: List[T1] => Option[T2]): List[T2] = lists(n)(l).map(f).flatten.toList
-
+  
   def matchRulesToGrammarRules(from: List[GrammarRuleMatcher])(l: GrammarRules): Option[(SymbolTable, GrammarRules)] = {
       var symbolTable: SymbolTable = Map()
       var matchedRules = List[GrammarRule]()
@@ -248,7 +246,7 @@ object Transform {
   type PatternSynonyms = List[PatternSynonym]
   sealed trait PatternAtom{ def id: String; def getIds: List[String]; def getLength: Int }
   case class TypedPatternVariable(id: String, typ: Symbol, rec: Boolean) extends PatternAtom{
-    override def toString = "(" + id + " :: " + typ.name + ")"
+    override def toString = if(id != "") ("(" + id + " :: " + typ.name + ")") else ("(" + typ.name + ")")
     def getIds = List(id)
     def getLength = 1
   }
@@ -277,7 +275,9 @@ object Transform {
     res
   }  
   
-  
+  def lists[T1](n: Int)(l: List[T1]) = l.combinations(n).map(_.permutations).flatten
+  def select[T1, T2](n: Int)(l: List[T1])(f: List[T1] => Option[T2]): List[T2] = lists(n)(l).map(f).flatten.toList
+
   def pairs(max1: Int, max2: Int) = for(i <- (1 to (max1 * max2)).view; j1 <- (1 to max1).view; if(i - j1 >= 1 && i - j1 <= max2)) yield (j1, i - j1)
   
   def getTags(p: TypedPattern): List[String] = {
@@ -297,20 +297,23 @@ object Transform {
   
   def producePatternSynonyms(tRule: TransformerRule, matchedRules: GrammarRules, producedRules: GrammarRules, symbolTable: SymbolTable): PatternSynonyms = {
     var res = Set[PatternSynonym]()
-    for((i, j) <- pairs(tRule.from.size, tRule.to.size).map(x => (x._1 + 1, x._2 + 1)); 
+    for((i, j) <- pairs(tRule.from.size, tRule.to.size).map(x => (x._1, x._2)); 
+    		recursiveFrom <- tRule.from;
+        recursiveTo <- tRule.to;
         fromRules <- lists(i)(tRule.from);
-        toRules   <- lists(j)(tRule.to)) {
+        toRules   <- lists(j)(tRule.to)
+        ) {
       //if(((needed.keySet &~ found.keySet) union (found.keySet &~ needed.keySet)).isEmpty && !found.isEmpty) {
-        
-        
+
         var fromRulesPatterns      = fromRules.map(x => translateRule(findMatchingGrammarRule(x,  matchedRules, symbolTable), x, symbolTable))
         var   toRulesPatterns      =   toRules.map(x => translateRule(findMatchingGrammarRule(x, producedRules, symbolTable), x, symbolTable))
         var currentFromPattern     = fromRulesPatterns.head
         var currentToPattern       = toRulesPatterns.head  
-        var insertInFrom           = fromRulesPatterns.tail.init
-        var insertInTo             = toRulesPatterns.tail.init
-        val recursiveInsertionFrom = toRulesPatterns.last
-        val recursiveInsertionTo   = fromRulesPatterns.last
+        var insertInFrom           = fromRulesPatterns.tail
+        var insertInTo             = toRulesPatterns.tail
+        //switch from/to, since we want to insert from the other side
+        val recursiveInsertionTo   = translateRule(findMatchingGrammarRule(recursiveFrom,  matchedRules, symbolTable), recursiveFrom, symbolTable)
+        val recursiveInsertionFrom = translateRule(findMatchingGrammarRule(recursiveTo,   producedRules, symbolTable), recursiveTo,   symbolTable)
         for(currentInsert <- insertInFrom){
           currentFromPattern = replaceAll(currentFromPattern, currentInsert)
         }
@@ -318,7 +321,7 @@ object Transform {
             currentToPattern = replaceAll(  currentToPattern, currentInsert)
         }
         
-        if(getTags(currentFromPattern) == getTags(currentToPattern)){
+        if(getTags(currentFromPattern) == getTags(currentToPattern) && isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
         
@@ -329,8 +332,23 @@ object Transform {
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
 
+        println(PatternSynonym(currentFromPattern, currentToPattern))
+
     }
     numberCountingVariables(res.toList)
+    //res.toList
+  }
+  
+  def isRecursive: TypedPattern => Boolean = ! isNotRecursive(_)
+  
+  def isNotRecursive(what: TypedPattern): Boolean = {
+    what.patternContent.foreach { x => x match {
+        case TypedPatternVariable(_, _, true) => return false
+        case t: TypedPattern if(isNotRecursive(t)) => return false
+        case _ => {}
+      }
+    }
+    return true
   }
   
   def recursivePattern(in: TypedPattern, what: TypedPattern): TypedPattern = {

@@ -1,10 +1,10 @@
 start:
 S
 in:
-S -> r(S:1) t:i F:j | F:j
+S -> r(S) t:i F:j | F:j
 
 out:
-S1 -> F:j t:i r(S1:1) | F:j
+S1 -> F:j t:i r(S1) | F:j
 
 in: 
 A -> <int>

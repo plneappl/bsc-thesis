@@ -9,27 +9,9 @@ generatedFmts = unlines $ formatKeywords ++ formatSubscripts
 
 keywords :: [String]
 keywords =
-  [ "class"
-  , "data"
-  , "def"
-  , "emit"
-  , "extends"
-  , "for"
-  , "functor"
-  , "match"
-  , "new"
-  , "object"
-  , "pattern"
-  , "private"
-  , "sealed"
-  , "struct"
-  , "this"
-  , "trait"
-  , "val"
-  , "var"
-  , "with"
-  , "yield"
-  ]
+  words $   "begin class data def emit end extends for functor in match new"
+    ++" "++ "object out pattern private sealed struct this trait val var"
+    ++" "++ "with yield"
 
 subscripts :: [(String, String)]
 subscripts =
@@ -44,7 +26,7 @@ subscripts =
 
 subscribedNames :: [String]
 subscribedNames =
-  words "A B F f field from Record R S s T t to"
+  words "A B C D E F f field from Record R S s T t to U V W X Y Z"
 
 formatKeyword :: String -> String
 formatKeyword x = "\"\\KEYWORD{" ++ x ++ "}\""

@@ -697,7 +697,7 @@ made of 3 parts: pattern for input rules, the output rules, and
 the corresponding pattern synonym templates delineating
 information flow. Let us write down some examples. The grammar
 production rules are written in datatype-declaration style; the
-first right-hand-side metavariable (|A1|, |A2|, |D1| in the
+first right-hand-side metavariable (|X_1|, |X_2|, |U_1| in the
 example below) match rule names.
 
 \subsection*{Concrete and abstract grammars}
@@ -791,7 +791,7 @@ splitOn p s =  case dropWhile (== p) s of
 
 \smallbreak\noindent Pattern synonyms. Note how |A_1| and |A_3|
 are different: They are generated respectively by two
-applications of the first inner block, from the calls |collaps
+applications of the first inner block, from the calls |collapse
 "A" "C_1"| and |collapse "A" "S_3"|.
 \smallskip
 

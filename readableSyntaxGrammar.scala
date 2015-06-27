@@ -3,8 +3,8 @@ object ReadableSyntaxGrammar {
   import Transform._
   import sext._
   
-  val List(commentNL, start, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom, term, nt, literal, int, recursive, identifier) = 
-    List('commentNL, 'start, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom, 'term, 'nt, 'literal, 'int, 'recursive, 'identifier).map(Nonterminal)
+  val List(commentNL, start, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom, term, nt, literal, int, recursive, identifier, pipe) = 
+    List('commentNL, 'start, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom, 'term, 'nt, 'literal, 'int, 'recursive, 'identifier, 'pipe).map(Nonterminal)
   
   val t_start        = Terminal("""start:"""                      )
   val t_commentNL      = Regex(   """//[^\r\n]*"""                )
@@ -52,7 +52,7 @@ object ReadableSyntaxGrammar {
     GrammarRule(rhsAtom     , List(term                                                                                 ), 0),   
     GrammarRule(rhsAtom     , List(literal                                                                              ), 0),   
     GrammarRule(rhsAtom     , List(int                                                                                  ), 0),
-    GrammarRule(rhsAtom     , List(t_pipe                                                                               ), 0),                                                   
+    GrammarRule(rhsAtom     , List(pipe                                                                                 ), 0),                            
     GrammarRule(recursive   , List(t_recursive, t_lbrace, nt, t_rbrace                                                  ), 0),                                
     GrammarRule(nt          , List(t_nt, identifier                                                                     ), 0),                            
     GrammarRule(nt          , List(t_nt                                                                                 ), 0),                               
@@ -63,7 +63,8 @@ object ReadableSyntaxGrammar {
     GrammarRule(int         , List(t_int, identifier                                                                    ), 0),                                                            
     GrammarRule(int         , List(t_int                                                                                ), 0),
     GrammarRule(identifier  , List(t_colon, t_num                                                                       ), 0),
-    GrammarRule(identifier  , List(t_colon, t_identifier                                                                ), 0)                                                                                                                                        
+    GrammarRule(identifier  , List(t_colon, t_identifier                                                                ), 0),
+    GrammarRule(pipe        , List(t_optNewLines, t_pipe                                                                ), 0)                                                                                                                                        
   ) zip (Stream from 1)).map(x => x match { case (GrammarRule(a, b, _), c) => GrammarRule(a, b, c)})          
   
   def grammar = Grammar(start, rules)
@@ -162,7 +163,8 @@ object ReadableSyntaxGrammar {
     case Branch('term     , list)  => handleTerm(list)      
     case Branch('literal  , list)  => handleLiteral(list)
     case Branch('int      , list)  => handleInt(list)
-    case LeafString("|")           => Some(LiteralMatcher("|", ""))
+    case Branch('pipe     , list)  => handlePipe(list)
+    case x                         => {println(x); None}
   }
   
   //GrammarRule(recursive   , List(t_recursive, t_rbrace, nt, t_lbrace                                    
@@ -225,6 +227,12 @@ object ReadableSyntaxGrammar {
     case Nil => Some(x)
     case List(Branch('identifier, List(_, LeafString(st)))) => Some(x.copy(st))
   }
+  
+  //GrammarRule(pipe        , List(t_optNewLines, t_pipe 
+  def handlePipe: SyntaxTreeRecurser[TransformerAtom] = t => t match {
+    case List(_, LeafString(s)) if(s == "|") => Some(LiteralMatcher("|", ""))
+  }
+    
     
   def getGrammarTransformer(path: String): GrammarTransformer = {
     val source = scala.io.Source.fromFile(path)

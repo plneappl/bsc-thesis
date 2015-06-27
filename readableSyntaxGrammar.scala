@@ -3,14 +3,15 @@ object ReadableSyntaxGrammar {
   import Transform._
   import sext._
   
-  val List(commentNL, start, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom, term, nt, literal, int, recursive, identifier, pipe) = 
-    List('commentNL, 'start, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom, 'term, 'nt, 'literal, 'int, 'recursive, 'identifier, 'pipe).map(Nonterminal)
+  val List(commentNL, begin, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom, term, nt, literal, int, recursive, identifier, pipe) = 
+    List('commentNL, 'begin, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom, 'term, 'nt, 'literal, 'int, 'recursive, 'identifier, 'pipe).map(Nonterminal)
   
-  val t_start        = Terminal("""start:"""                      )
-  val t_commentNL      = Regex(   """//[^\r\n]*"""                )
-  val t_in          = Regex(   """in:"""                          )
-  val t_out         = Regex(   """out:"""                         )
-  val t_seq         = Regex(   """seq:"""                         )
+  val t_commentNL   = Regex(   """//[^\r\n]*"""                   )
+  val t_in          = Terminal("""in"""                           )
+  val t_out         = Terminal("""out"""                          )
+  val t_seq         = Terminal("""seq"""                          )
+  val t_begin       = Terminal("""begin"""                        )
+  val t_end         = Terminal("""end"""                          )
   val t_rightArrow  = Terminal("""->"""                           )
   val t_colon       = Terminal(""":"""                            )
   val t_pipe        = Terminal("""|"""                            )
@@ -26,7 +27,7 @@ object ReadableSyntaxGrammar {
   val t_optNewLines = Regex(   """[\s\r\n]*"""                    )
   val t_lbrace      = Terminal("""("""                            )
   val t_rbrace      = Terminal(""")"""                            )
-  val t_recursive    = Terminal("""r"""                           )
+  val t_recursive   = Terminal("""r"""                            )
   
   val rules = (List(
     GrammarRule(commentNL   , List(t_newLines, t_commentNL, t_newLines, commentNL                                       ), 0),
@@ -34,7 +35,8 @@ object ReadableSyntaxGrammar {
     GrammarRule(commentNL   , List(t_commentNL, t_newLines, commentNL                                                   ), 0),
     GrammarRule(commentNL   , List(t_commentNL, t_newLines                                                              ), 0),
     GrammarRule(commentNL   , List(t_newLines                                                                           ), 0),
-    GrammarRule(start       , List(t_optNewLines, t_start, commentNL, nt, commentNL, doc                                ), 0),
+    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines, begin   ), 0),
+    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines          ), 0),
     GrammarRule(doc         , List(ruleDef, doc                                                                         ), 0),                                                                                                                                                           
     GrammarRule(doc         , List(ruleDef                                                                              ), 0),                                                                                                                                                                
     GrammarRule(ruleDef     , List(inPart, outPart                                                                      ), 0),                                                                                                                                                                 
@@ -67,7 +69,7 @@ object ReadableSyntaxGrammar {
     GrammarRule(pipe        , List(t_optNewLines, t_pipe                                                                ), 0)                                                                                                                                        
   ) zip (Stream from 1)).map(x => x match { case (GrammarRule(a, b, _), c) => GrammarRule(a, b, c)})          
   
-  def grammar = Grammar(start, rules)
+  def grammar = Grammar(begin, rules)
   
   def parseReadableSyntax = parseWithGrammar(grammar) _
   
@@ -81,13 +83,21 @@ object ReadableSyntaxGrammar {
     case _ => List()
   }
   
-  //GrammarRule(start       , List(t_optNewLines, t_start, commentNL, nt, commentNL, doc 
-  def docToTransformerRules(t: SyntaxTree): GrammarTransformer = t match {
-    case Branch('start, List(_, _, _, Branch('nt, List(LeafString(nt))), _, doc)) => { 
-      GrammarTransformer(
-        NonterminalMatcher(nt, "", false), 
-        splitRules(operateOnRRTree('ruleDef)(ruleDefsToTransformerRules)(doc))
-      )
+  //GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines, begin
+  //GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines                   
+  def docToTransformerRules(t: List[SyntaxTree]): List[GrammarTransformer] = t match {
+    case (Branch('begin, list) :: more) => docListToTransformerRules(list) ++ docToTransformerRules(more)
+    case Nil => Nil
+  }
+  
+  def docListToTransformerRules(l: List[SyntaxTree]): List[GrammarTransformer] = {
+    l match {
+      case (_ :: _ :: _ :: Branch('nt, List(LeafString(nt))) :: _ :: doc :: _ :: _ :: more) => { 
+        GrammarTransformer(
+          NonterminalMatcher(nt, "", false), 
+          splitRules(operateOnRRTree('ruleDef)(ruleDefsToTransformerRules)(doc))
+        ) :: docToTransformerRules(more)
+      }
     }
   }
   
@@ -234,11 +244,11 @@ object ReadableSyntaxGrammar {
   }
     
     
-  def getGrammarTransformer(path: String): GrammarTransformer = {
+  def getGrammarTransformers(path: String): List[GrammarTransformer] = {
     val source = scala.io.Source.fromFile(path)
     val tr = source.mkString
     source.close
-    val tr2 = (parseWithGrammar(grammar)(tr))
+    val tr2 = List(parseWithGrammar(grammar)(tr))
     //println(tr2.treeString)
     docToTransformerRules(tr2)
   }

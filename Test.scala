@@ -50,11 +50,11 @@ object Test{
 		))
 	
 	def main(args: Array[String]) = {
-		testTransformer(gLR)("eliminateLeftRecursion.tr")
+		//testTransformer(gLR)("eliminateLeftRecursion.tr")
 		//testTransformer(g1)("concreteToAbstract.tr")
 		//testTransformer(g1)("concreteToAbstract2.tr")
 
-		//testTransformer(g1)("chomsky1.tr")
+		testTransformer(g1)("chomsky1.tr")
 		//testTransformer(g1)("chomsky2.tr")
 
 		//testTransformer(g1)("inlining.tr")
@@ -63,7 +63,7 @@ object Test{
 	}
 	
 	def testTransformer(g: Grammar)(file: String) = {
-		val tr = getGrammarTransformer(file)
+		val tr = getGrammarTransformers(file).head
 		val (newG, ps) = transformGrammar(tr)(g)
 		println("--------- " + file + " ---------")
 		println("--------- Transforming: ---------")
@@ -79,8 +79,8 @@ object Test{
 
 	
 	def main2(args: Array[String]) = {
-		val ch1 = getGrammarTransformer("chomsky1.tr")
-		val ch2 = getGrammarTransformer("chomsky2.tr")
+		val ch1 = getGrammarTransformers("chomsky1.tr").head
+		val ch2 = getGrammarTransformers("chomsky2.tr").head
 		val (newG, ps) = transformGrammar(ch1)(g1)
 		println
 		println(g1)
@@ -93,7 +93,7 @@ object Test{
 	}
 	
 	def main3(args: Array[String]) = {
-		val tr3 = getGrammarTransformer("readableSyntax1.tr")
+		val tr3 = getGrammarTransformers("readableSyntax1.tr").head
 		val (newG, ps) = transformGrammar(tr3)(g1)
 		println
 		println(g1)

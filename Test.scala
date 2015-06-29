@@ -50,11 +50,13 @@ object Test{
 		))
 	
 	def main(args: Array[String]) = {
+		val tr = getGrammarTransformers("newDef.tr")
+		println(tr.treeString)
 		//testTransformer(gLR)("eliminateLeftRecursion.tr")
 		//testTransformer(g1)("concreteToAbstract.tr")
 		//testTransformer(g1)("concreteToAbstract2.tr")
 
-		testTransformer(g1)("chomsky1.tr")
+		//testTransformer(g1)("chomsky1.tr")
 		//testTransformer(g1)("chomsky2.tr")
 
 		//testTransformer(g1)("inlining.tr")

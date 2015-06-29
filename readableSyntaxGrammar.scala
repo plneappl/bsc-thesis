@@ -5,68 +5,96 @@ object ReadableSyntaxGrammar {
   
   val List(commentNL, begin, doc, ruleDef, inPart, outPart, sequencePart, ruleMatchers, ruleMatcher, rhs, rhsAtom, term, nt, literal, int, recursive, identifier, pipe) = 
     List('commentNL, 'begin, 'doc, 'ruleDef, 'inPart, 'outPart, 'sequencePart, 'ruleMatchers, 'ruleMatcher, 'rhs, 'rhsAtom, 'term, 'nt, 'literal, 'int, 'recursive, 'identifier, 'pipe).map(Nonterminal)
+  val List(nameBinding, typeEquiv, typeDef, pattern1, pattern2, pattern3, identifiers, args, ruleName, nameGen, declarations, declaration) = 
+    List('nameBinding, 'typeEquiv, 'typeDef, 'pattern1, 'pattern2, 'pattern3, 'identifiers, 'args, 'ruleName, 'nameGen, 'declarations, 'declaration).map(Nonterminal)
   
-  val t_commentNL   = Regex(   """//[^\r\n]*"""                   )
-  val t_in          = Terminal("""in"""                           )
-  val t_out         = Terminal("""out"""                          )
-  val t_seq         = Terminal("""seq"""                          )
-  val t_begin       = Terminal("""begin"""                        )
-  val t_end         = Terminal("""end"""                          )
-  val t_rightArrow  = Terminal("""->"""                           )
-  val t_colon       = Terminal(""":"""                            )
-  val t_pipe        = Terminal("""|"""                            )
-  val t_nt          = Regex(   """[A-Z][A-Za-z0-9]*"""            )
-  val t_literal     = Regex(   """"([^A-Z"|<:\s][^"|<:\s]*)?""""  )                  //")//this is so my syntax highlighting works
-  val t_term        = Regex(   """[a-z][A-Za-z0-9]*"""            )
-  val t_identifier  = Regex(   """[a-z]+"""                       )
-  val t_num         = Regex(   """[0-9]+"""                       )
-  val t_int         = Terminal("""<int>"""                        )
-  val t_optSpace    = Regex(   """ *"""                           )
-  val t_space       = Regex(   """ +"""                           )
-  val t_newLines    = Regex(   """[\s\r\n]+"""                    )
-  val t_optNewLines = Regex(   """[\s\r\n]*"""                    )
-  val t_lbrace      = Terminal("""("""                            )
-  val t_rbrace      = Terminal(""")"""                            )
-  val t_recursive   = Terminal("""r"""                            )
+  val t_commentNL        = Regex(   """//[^\r\n]*"""                   )
+  val t_in               = Terminal("""in"""                           )
+  val t_out              = Terminal("""out"""                          )
+  val t_seq              = Terminal("""seq"""                          )
+  val t_begin            = Terminal("""begin"""                        )
+  val t_end              = Terminal("""end"""                          )
+  val t_rightArrow       = Terminal("""->"""                           )
+  val t_colon            = Terminal(""":"""                            )
+  val t_pipe             = Terminal("""|"""                            )
+  val t_nt               = Regex(   """[A-Z][A-Za-z0-9]*"""            )
+  val t_literal          = Regex(   """"([^A-Z"|<:\s][^"|<:\s]*)?""""  )                  //")//this is so my syntax highlighting works
+  val t_literalUppercase = Regex(   """"([A-Z]+)""""                   )                  //")//this is so my syntax highlighting works
+  val t_term             = Regex(   """[a-z][A-Za-z0-9]*"""            )
+  val t_variable         = Regex(   """[a-z]+"""                       )
+  val t_num              = Regex(   """[0-9]+"""                       )
+  val t_int              = Terminal("""<int>"""                        )
+  val t_optSpace         = Regex(   """ *"""                           )
+  val t_space            = Regex(   """ +"""                           )
+  val t_newLines         = Regex(   """[\s\r\n]+"""                    )
+  val t_optNewLines      = Regex(   """[\s\r\n]*"""                    )
+  val t_lbrace           = Terminal("""("""                            )
+  val t_rbrace           = Terminal(""")"""                            )
+  val t_recursive        = Terminal("""r"""                            )
+  val t_equal            = Terminal("""="""                            )
+  val t_pattern          = Terminal("""pattern"""                      )
+  val t_underscore       = Terminal("""_"""                            )
   
   val rules = (List(
-    GrammarRule(commentNL   , List(t_newLines, t_commentNL, t_newLines, commentNL                                       ), 0),
-    GrammarRule(commentNL   , List(t_newLines, t_commentNL, t_newLines                                                  ), 0),
-    GrammarRule(commentNL   , List(t_commentNL, t_newLines, commentNL                                                   ), 0),
-    GrammarRule(commentNL   , List(t_commentNL, t_newLines                                                              ), 0),
-    GrammarRule(commentNL   , List(t_newLines                                                                           ), 0),
-    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines, begin   ), 0),
-    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, nt, commentNL, doc, t_end, t_optNewLines          ), 0),
-    GrammarRule(doc         , List(ruleDef, doc                                                                         ), 0),                                                                                                                                                           
-    GrammarRule(doc         , List(ruleDef                                                                              ), 0),                                                                                                                                                                
-    GrammarRule(ruleDef     , List(inPart, outPart                                                                      ), 0),                                                                                                                                                                 
-    GrammarRule(ruleDef     , List(inPart, sequencePart                                                                 ), 0),                                                                                                              
-    GrammarRule(inPart      , List(t_in, commentNL, ruleMatchers                                                        ), 0),                                                                                                                                                  
-    GrammarRule(outPart     , List(t_out, commentNL, ruleMatchers                                                       ), 0),                                                                                                                                                    
-    GrammarRule(sequencePart, List(t_seq, commentNL, ruleMatchers                                                       ), 0),                                                                                                                                                       
-    GrammarRule(ruleMatchers, List(ruleMatcher, ruleMatchers                                                            ), 0),                                                                                                                                                       
-    GrammarRule(ruleMatchers, List(ruleMatcher                                                                          ), 0),                                                                                                                                               
-    GrammarRule(ruleMatcher , List(nt, t_space, t_rightArrow, t_space, rhs, commentNL                                   ), 0),                                                       
-    GrammarRule(rhs         , List(rhsAtom, t_space, rhs                                                                ), 0),                                               
-    GrammarRule(rhs         , List(rhsAtom                                                                              ), 0),   
-    GrammarRule(rhsAtom     , List(recursive                                                                            ), 0),   
-    GrammarRule(rhsAtom     , List(nt                                                                                   ), 0),   
-    GrammarRule(rhsAtom     , List(term                                                                                 ), 0),   
-    GrammarRule(rhsAtom     , List(literal                                                                              ), 0),   
-    GrammarRule(rhsAtom     , List(int                                                                                  ), 0),
-    GrammarRule(rhsAtom     , List(pipe                                                                                 ), 0),                            
-    GrammarRule(recursive   , List(t_recursive, t_lbrace, nt, t_rbrace                                                  ), 0),                                
-    GrammarRule(nt          , List(t_nt, identifier                                                                     ), 0),                            
-    GrammarRule(nt          , List(t_nt                                                                                 ), 0),                               
-    GrammarRule(literal     , List(t_literal, identifier                                                                ), 0),                                                                      
-    GrammarRule(literal     , List(t_literal                                                                            ), 0),                                
-    GrammarRule(term        , List(t_term, identifier                                                                   ), 0),                                                                      
-    GrammarRule(term        , List(t_term                                                                               ), 0),                                                            
-    GrammarRule(int         , List(t_int, identifier                                                                    ), 0),                                                            
-    GrammarRule(int         , List(t_int                                                                                ), 0),
-    GrammarRule(identifier  , List(t_colon, t_num                                                                       ), 0),
-    GrammarRule(identifier  , List(t_colon, t_identifier                                                                ), 0),
-    GrammarRule(pipe        , List(t_optNewLines, t_pipe                                                                ), 0)                                                                                                                                        
+    GrammarRule(commentNL   , List(t_newLines, t_commentNL, t_newLines, commentNL                                                       ), 0),
+    GrammarRule(commentNL   , List(t_newLines, t_commentNL, t_newLines                                                                  ), 0),
+    GrammarRule(commentNL   , List(t_commentNL, t_newLines, commentNL                                                                   ), 0),
+    GrammarRule(commentNL   , List(t_commentNL, t_newLines                                                                              ), 0),
+    GrammarRule(commentNL   , List(t_newLines                                                                                           ), 0),
+    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, declarations, commentNL, doc, commentNL, t_end, commentNL, begin  ), 0),
+    GrammarRule(begin       , List(t_optNewLines, t_begin, commentNL, declarations, commentNL, doc, commentNL, t_end, t_optNewLines     ), 0),
+    GrammarRule(doc         , List(ruleDef, doc                                                                                         ), 0),                                                                                                                                                           
+    GrammarRule(doc         , List(begin, doc                                                                                           ), 0),                                                                                                                                                           
+    GrammarRule(doc         , List(ruleDef                                                                                              ), 0),                                                                                                                                                           
+    GrammarRule(doc         , List(begin                                                                                                ), 0), 
+    GrammarRule(declarations, List(declaration, declarations                                                                            ), 0),
+    GrammarRule(declarations, List(declaration                                                                                          ), 0),
+    GrammarRule(declaration , List(nameBinding                                                                                          ), 0),
+    GrammarRule(declaration , List(nameGen                                                                                              ), 0),
+    //X t X_1 X_2
+    GrammarRule(declaration , List(t_nt                                                                                                 ), 0),
+    GrammarRule(declaration , List(identifier                                                                                           ), 0),
+    //U = "A"
+    GrammarRule(nameBinding , List(t_nt, t_space, t_equal, t_space, t_literalUppercase                                                  ), 0),
+    //U_1 = collapse U X_1
+    GrammarRule(nameGen     , List(ruleName, t_equal, t_variable, rhs                                                                   ), 0),
+    //X_1
+    GrammarRule(ruleName    , List(t_nt, t_underscore, t_num                                                                            ), 0),
+    GrammarRule(pattern1    , List(t_pattern, t_space, typeEquiv, commentNL, pattern2                                                   ), 0),
+    GrammarRule(pattern2    , List(pattern3, commentNL, pattern2                                                                        ), 0),
+    GrammarRule(pattern2    , List(pattern3                                                                                             ), 0),                                                                                                                                                               
+    GrammarRule(pattern3    , List(ruleName, t_space, identifiers, t_space, t_equal, t_space, ruleName, t_space, identifiers            ), 0),
+    GrammarRule(typeEquiv   , List(t_nt, t_space, t_equal, t_space, t_nt                                                                ), 0),
+    GrammarRule(identifiers , List(t_variable, t_space, identifiers                                                                     ), 0),
+    GrammarRule(identifiers , List(t_variable                                                                                           ), 0),
+    GrammarRule(ruleDef     , List(inPart, outPart, pattern1                                                                            ), 0),                                                                                                                                                                 
+    GrammarRule(ruleDef     , List(inPart, sequencePart, pattern1                                                                       ), 0),                                                                                                              
+    GrammarRule(inPart      , List(t_in, commentNL, ruleMatchers                                                                        ), 0),                                                                                                                                                  
+    GrammarRule(outPart     , List(t_out, commentNL, ruleMatchers                                                                       ), 0),                                                                                                                                                    
+    GrammarRule(sequencePart, List(t_seq, commentNL, ruleMatchers                                                                       ), 0),                                                                                                                                                       
+    GrammarRule(ruleMatchers, List(ruleMatcher, ruleMatchers                                                                            ), 0),                                                                                                                                                       
+    GrammarRule(ruleMatchers, List(ruleMatcher                                                                                          ), 0),                                                                                                                                               
+    GrammarRule(ruleMatcher , List(nt, t_space, t_rightArrow, t_space, ruleName, t_space, rhs, commentNL                                ), 0),                                                       
+    GrammarRule(rhs         , List(rhsAtom, t_space, rhs                                                                                ), 0),                                               
+    GrammarRule(rhs         , List(rhsAtom                                                                                              ), 0),   
+    GrammarRule(rhsAtom     , List(recursive                                                                                            ), 0),   
+    GrammarRule(rhsAtom     , List(nt                                                                                                   ), 0),   
+    GrammarRule(rhsAtom     , List(term                                                                                                 ), 0),   
+    GrammarRule(rhsAtom     , List(literal                                                                                              ), 0),   
+    GrammarRule(rhsAtom     , List(int                                                                                                  ), 0),
+    GrammarRule(rhsAtom     , List(pipe                                                                                                 ), 0),                            
+    GrammarRule(recursive   , List(t_recursive, t_lbrace, nt, t_rbrace                                                                  ), 0),                                
+    GrammarRule(nt          , List(t_nt, identifier                                                                                     ), 0),                            
+    GrammarRule(nt          , List(t_nt                                                                                                 ), 0),                               
+    GrammarRule(literal     , List(t_literal, identifier                                                                                ), 0),                                                                      
+    GrammarRule(literal     , List(t_literal                                                                                            ), 0),                                
+    GrammarRule(term        , List(t_term, identifier                                                                                   ), 0),                                                                      
+    GrammarRule(term        , List(t_term                                                                                               ), 0),                                                            
+    GrammarRule(int         , List(t_int, identifier                                                                                    ), 0),                                                            
+    GrammarRule(int         , List(t_int                                                                                                ), 0),
+    GrammarRule(identifier  , List(t_colon, t_num                                                                                       ), 0),
+    GrammarRule(identifier  , List(t_colon, t_variable                                                                      ), 0),
+    GrammarRule(pipe        , List(t_optNewLines, t_pipe                                                                      ), 0)                                                                                                                                        
   ) zip (Stream from 1)).map(x => x match { case (GrammarRule(a, b, _), c) => GrammarRule(a, b, c)})          
   
   def grammar = Grammar(begin, rules)
@@ -232,7 +260,7 @@ object ReadableSyntaxGrammar {
   }
   
   //GrammarRule(identifier  , List(t_colon, IntegerTerminal
-  //GrammarRule(identifier  , List(t_colon, t_identifier                                                                                                                                          
+  //GrammarRule(identifier  , List(t_colon, t_variable                                                                                                                                          
   def handleIdentifier(x: TransformerAtom): SyntaxTreeRecurser[TransformerAtom] = t => t match {
     case Nil => Some(x)
     case List(Branch('identifier, List(_, LeafString(st)))) => Some(x.copy(st))

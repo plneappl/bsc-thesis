@@ -332,7 +332,6 @@ object Transform {
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
 
-        println(PatternSynonym(currentFromPattern, currentToPattern))
 
     }
     numberCountingVariables(res.toList)
@@ -365,9 +364,6 @@ object Transform {
   def numberCountingVariables(p: PatternSynonym): PatternSynonym = {
     var lhs = p.lhs
     var rhs = p.rhs
-    println(lhs)
-    println(lhs.getIds)
-    println(lhs.getLength)
     val countingVars = getTags(lhs).toSet[String].filter(!isNum(_))
     var free = (1 to (lhs.getLength + rhs.getLength)).filter(x => !(lhs.getIds.contains(x.toString))).toList
     for(countingVar <- countingVars){

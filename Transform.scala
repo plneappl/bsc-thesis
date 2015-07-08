@@ -8,22 +8,27 @@ object Transform {
   sealed abstract class TransformerAtom{
     def tag: String
     def copy(t: String): TransformerAtom
+    def copy(f: Boolean): TransformerAtom
   }
   case class NonterminalMatcher(name: String, tag: String, recursive: Boolean) extends TransformerAtom {
     override def toString = (if(recursive) "r(" else "") + name +  (if(tag != "") ":" + tag else "") + (if(recursive) ")" else "")
     def copy(t: String) = NonterminalMatcher(name, t, recursive)
+    def copy(f: Boolean) = NonterminalMatcher(name, tag, f)
   }
   case class TerminalMatcher(name: String, tag: String) extends TransformerAtom {
     override def toString = if(tag != "") name + ":" + tag else name
     def copy(t: String) = TerminalMatcher(name, t)
+    def copy(f: Boolean) = TerminalMatcher(name, tag)
   }
   case class LiteralMatcher(matches: String, tag: String) extends TransformerAtom {
     override def toString = if(tag != "") s""""$matches":$tag""" else s""""$matches""""               //"//again, for syntax highlighting
     def copy(t: String) = LiteralMatcher(matches, t)
+    def copy(f: Boolean) = LiteralMatcher(matches, tag)
   }
   case class IntegerMatcher(tag: String) extends TransformerAtom {
     override def toString = "<int>:" + tag
     def copy(t: String) = IntegerMatcher(t)
+    def copy(f: Boolean) = IntegerMatcher(tag)
   }
   
   type TransformerSequence = List[TransformerAtom] 
@@ -244,7 +249,13 @@ object Transform {
     override def toString = lhs.toString + " = " + rhs.toString
   }
   type PatternSynonyms = List[PatternSynonym]
-  sealed trait PatternAtom{ def id: String; def getIds: List[String]; def getLength: Int }
+  
+  sealed trait PatternAtom { def id: String; def getIds: List[String]; def getLength: Int }
+  case class PatternAtomPrototype(id: String) extends PatternAtom{
+    override def toString = id
+    def getIds = List(id)
+    def getLength = 1
+  }
   case class TypedPatternVariable(id: String, typ: Symbol, rec: Boolean) extends PatternAtom{
     override def toString = if(id != "") ("(" + id + " :: " + typ.name + ")") else ("(" + typ.name + ")")
     def getIds = List(id)

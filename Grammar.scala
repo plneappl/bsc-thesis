@@ -2,6 +2,7 @@ object Grammar {
 	sealed trait GrammarAtom
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
 		override def toString = sym.name
+    def asString(indent: String): String = indent + toString
 	}
 	case class Terminal(sym: String) extends GrammarAtom{
 		override def toString = "\"" + sym + "\""
@@ -68,14 +69,14 @@ object Grammar {
   def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduceRight((x, y) => x | y)
   	
 	def parseString(expected: String): Parser[String] = code => {
-		//println("T: trying to match: " + expected)
-    //println("T: with:\n" + code.split("\n")(0))
+		println("T: trying to match: " + expected)
+    println("T: with:\n" + code.split("\n")(0))
     if (code startsWith expected) Some((expected, code drop expected.length))
     else None
   }
   def parseRegex(regex: String): Parser[String] = code => {
-    //println("R: trying to match: '" + regex + "'")
-    //println("R: with:            '" + code + "'")
+    println("R: trying to match: '" + regex + "'")
+    println("R: with:            '" + code + "'")
     val Pattern = s"(?s)($regex)(.*)".r      	
     code match {
       case Pattern(groups @ _*) => {

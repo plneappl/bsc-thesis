@@ -37,7 +37,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     patterns ~> ((rmtsIn, rmtsOut, teq, patns) => MatcherAndTransformer(rmtsIn.toList, rmtsOut.toList, teq, patns.toList))
   } 
     
-  def commentNL    = rule { oneOrMore(commentEOL) }
+  def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
   def commentEOL   = rule { optional(t_optspace ~ "//" ~ (!t_newLine ~ ANY)) ~ t_newLine }
   
   def declarations = rule { oneOrMore(declaration).separatedBy(commentNL) }
@@ -49,7 +49,17 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_newLine    = CharPredicate("\n\r")
   
   def declaration = rule { nameBinding | nameGen | (t_nt ~> (n => new Nonterminal(Symbol(n)) with BeginPart )) }
-  def ruleMatcher = rule { t_nt ~ t_space ~ wspStr("-> ") ~ ruleName ~ t_space ~ oneOrMore(rhsAtom).separatedBy(t_space) ~> ((n, rn, rhs) => GrammarRuleMatcher(NonterminalMatcher(n, "", false), rhs.toList))}
+  def ruleMatcher = rule { t_nt ~ t_space ~ wspStr("-> ") ~ ruleName ~ t_space ~ oneOrMore(rhsAtom).separatedBy(t_space) ~> (
+    (n, rn, rhs) => 
+      if(rn.typ.sym.name == n){
+        GrammarRuleMatcher(NonterminalMatcher(n, rn.name, false), rhs.toList)
+      }
+      else {
+        throw new Exception("Rule name " + rn + " didn't match the Rule's type (" + n + ")!")
+      }
+    ) 
+  }
+  
   def pattern     = rule { ruleName ~ t_space ~ oneOrMore(t_variable).separatedBy(t_space) ~ t_space ~ t_equal ~ t_space ~ ruleName ~ t_space ~ oneOrMore(t_variable).separatedBy(t_space) ~> ((rn1, lVars1, rn2, lVars2) => {
       val lPatterns = List(lVars1, lVars2) map (l => l map PatternAtomPrototype) map (seq => seq.toList)
       PatternSynonym(TypedPattern(rn1.name, lPatterns(0), rn1.typ.sym), TypedPattern(rn2.name, lPatterns(1), rn2.typ.sym))
@@ -58,7 +68,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def patternAtoms = rule {
       (t_variable ~> PatternAtomPrototype) | (t_literal  ~> PatternTerminal)
   }
-  def ruleName    = rule { (t_nt ~ "_" ~ t_num) ~> ((n, i) => RuleName(Nonterminal(Symbol(n)), i.toInt))}
+  def ruleName    = rule { (t_nt ~ "_" ~ t_num) ~> ((n, i) => RuleName(Nonterminal(Symbol(n)), i))}
   def nameBinding = rule { t_nt ~ t_optspace ~ t_equal ~ t_optspace ~ (
       t_nt      ~> ((s: String) => Nonterminal(Symbol(s)))
     | t_literal ~> ((s: String) => Terminal(s))
@@ -144,7 +154,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     def asString(indent: String) = typeFor + " = " + fun + " " + args.mkString(" ")
   }
   
-  case class RuleName(typ: Nonterminal, name: Int) {
+  case class RuleName(typ: Nonterminal, name: String) {
     override def toString = typ + "_" + name
   }
   

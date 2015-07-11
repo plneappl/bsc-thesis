@@ -139,7 +139,7 @@ object Transform {
     }
     rhs = rhs.reverse
     
-    (st2, us2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs, -1))
+    (st2, us2, GrammarRule(lhs.asInstanceOf[Nonterminal], rhs, ""))
   }
   
   //produce a GrammarAtom from a TransformerAtom by looking up in the SymbolTable and adding new IDs
@@ -237,7 +237,7 @@ object Transform {
   def tagGrammarRules(rules: List[GrammarRule], nextTag: Int): (List[GrammarRule], Int) = rules match {
     case (GrammarRule(l, r, _)) :: rules2 => {
       val (l1, i) = tagGrammarRules(rules2, nextTag + 1)
-      ((GrammarRule(l, r, nextTag)) :: l1, i)
+      ((GrammarRule(l, r, nextTag.toString)) :: l1, i)
     }
     case Nil => (List[GrammarRule](), nextTag)
   }
@@ -267,7 +267,7 @@ object Transform {
     def getLength = 1
   }
 
-  case class TypedPattern(patternName: Int, patternContent: List[PatternAtom], typ: Symbol) extends PatternAtom {
+  case class TypedPattern(patternName: String, patternContent: List[PatternAtom], typ: Symbol) extends PatternAtom {
     def id = ""
     def getIds = patternContent.map(_.getIds).fold(List())((x, y) => x ++ y)
     def getLength = patternContent.map(_.getLength).fold(0)(_ + _)

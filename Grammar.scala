@@ -14,7 +14,7 @@ object Grammar {
 		override def toString = "<int>"
 	}
 	
-	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: Int){
+	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
 		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
 		override def toString = asString("", 0)
 		var matched = false
@@ -31,7 +31,7 @@ object Grammar {
 	}
 	
 	def joinStringsBy(join: String)(a: Any, b: Any) = a + join + b
-	def padding(i: Int, n: Int) = " " * (n.toString.length - i.toString.length)
+	def padding(i: String, n: Int) = " " * (n.toString.length - i.length)
 	
 	sealed trait SyntaxTree
 	case class Branch(nt: Symbol, childs: List[SyntaxTree]) extends SyntaxTree

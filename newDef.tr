@@ -1,13 +1,11 @@
+start U
 begin
 U = A
-begin
-X = C
 in
 X -> X_1 Y t X
 out
 U -> U_1 U t U
 pattern X = U
 X_1 x y z = U_1 x y z
-end
 end
 

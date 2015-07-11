@@ -4,6 +4,10 @@ object Grammar {
 		override def toString = sym.name
     def asString(indent: String): String = indent + toString
 	}
+  object Nonterminal extends GrammarAtom{
+    def apply(s: String): Nonterminal = new Nonterminal(Symbol(s))
+  }
+  
 	case class Terminal(sym: String) extends GrammarAtom{
 		override def toString = "\"" + sym + "\""
 	}

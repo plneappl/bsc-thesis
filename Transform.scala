@@ -38,7 +38,7 @@ object Transform {
   def applyMatcherAndTransformer(to: Grammar, st: SymbolTable)(tap: TransformerAndPatterns): (GrammarRules, PatternSynonyms) = {
     //apply tap.transformer        
     var outRules = List[GrammarRule]()
-    var patternSynonyms = List[PatternSynonym]()
+    var patternSynonyms = Set[PatternSynonym]()
     applyRule(tap.transformer, to, st) match {
       //if we were able to apply the rule, update our SymbolTable
       case Some(listOfResultPairs) => {
@@ -46,11 +46,8 @@ object Transform {
           outRules = producedRules ++ outRules
           var patterns = producePatternSynonyms(tap.transformer, matchedRules, producedRules, symTable)
           patternSynonyms = patternSynonyms ++ patterns
+          patternSynonyms = patternSynonyms ++ tap.patterns.map(finalizePattern(_, nameTable, matchedRules, producedRules))
           
-          for(pattern <- tap.patterns) {
-            val fromRule = getGrammarRuleByTag(nameTable(pattern.lhs.patternName))(matchedRules)
-            val   toRule = getGrammarRuleByTag(nameTable(pattern.rhs.patternName))(producedRules)
-          }
         }
       }
       //we couldn't apply the rule, so we do nothing
@@ -60,10 +57,52 @@ object Transform {
     //fill patterns
     //check pattern type
     
-    (outRules, patternSynonyms)
+    (outRules, patternSynonyms.toList)
   }
   
-  def getGrammarRuleByTag(tag: String): GrammarRules => GrammarRule = _.filter(x => x.tag == tag).head
+  def getGrammarRuleByTag(tag: String): GrammarRules => Option[GrammarRule] = _.filter(x => x.tag == tag).headOption
+  
+  def finalizePattern(p: PatternSynonym, nt: NameTable, mr: GrammarRules, pr: GrammarRules): PatternSynonym = {
+    println(p.lhs.patternName)
+    println(p.rhs.patternName)
+    val fromRule = getGrammarRuleByTag(nt(p.lhs.patternName))(mr).get
+    val   toRule = getGrammarRuleByTag(nt(p.rhs.patternName))(pr).get
+    println(fromRule)
+    println(toRule)
+    println(p)
+    println("----")
+    val lpc = finalizeTypedPattern(p.lhs, nt, fromRule, mr, pr)
+    val rpc = finalizeTypedPattern(p.rhs, nt,   toRule, pr, mr)
+    PatternSynonym(lpc, rpc)
+  }
+  
+  
+  def finalizeTypedPattern(side: TypedPattern, nt: NameTable, r: GrammarRule, rMe: GrammarRules, rOther: GrammarRules): TypedPattern = {
+     val pc = (r.rhs zip side.patternContent).map(x => {
+      val (ga, pa) = (x._1, x._2)
+      pa match {
+        case PatternAtomPrototype(id) => {
+          ga match {
+            case nt: Nonterminal    => TypedPatternVariable(id, nt, false)
+            case t: Terminal        => PatternTerminal(id, t)
+            case r: Regex           => PatternTerminal(id, r)
+            case IntegerTerminal    => PatternTerminal(id, IntegerTerminal)
+            case Nonterminal        => throw new Exception("How even...") //should not happen
+          }
+        }
+        case tp: TypedPattern => getGrammarRuleByTag(nt(tp.patternName))(rMe) match {
+          case Some(r1) if(r1.lhs == tp.typ) => finalizeTypedPattern(tp, nt, r1, rMe, rOther)
+          case _                             => {
+            val r1 = getGrammarRuleByTag(nt(tp.patternName))(rOther).get
+            finalizeTypedPattern(tp, nt, r1, rOther, rMe)
+          }
+        }
+        case pt: PatternTerminal => pt
+        case tpv: TypedPatternVariable => throw new Exception("How even...")//tpv //should not happen
+      }
+    })
+    TypedPattern(r.tag, pc, r.lhs)
+  }
   
   sealed abstract class TransformerAtom{
     def tag: String

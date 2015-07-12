@@ -43,12 +43,18 @@ object Test{
     
  
   def main(args: Array[String]): Unit = {
-    val source = scala.io.Source.fromFile("newDef.tr")
+    val source = scala.io.Source.fromFile("eliminateLeftRecursionNew.tr")
     val tr = source.mkString
     source.close
     val a = new ReadableSyntaxGrammar(tr)
     a.InputFile.run() match {
-      case Success(exprAst) => println("Result: \n" + exprAst + "\n---------------\n\n" + applyTransformerFile(g1)(exprAst))
+      case Success(exprAst) => {
+        val (gTrans, psns) = applyTransformerFile(gLR)(exprAst)
+        println("Result: \n" + exprAst + "\n---------------\n\n")
+        println(gTrans)
+        println("Patterns:\n------------\n")
+        psns foreach println
+      }
       case Failure(e: ParseError) => println("Expr is not valid: " + e.format(tr))
       case Failure(e) => println("Unknown error: " + e)
     }

@@ -1,4 +1,6 @@
-object Grammar {
+import ReadableSyntaxGrammar.RuleName
+
+object Grammar {  
 	sealed trait GrammarAtom
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
 		override def toString = sym.name
@@ -19,9 +21,10 @@ object Grammar {
 	}
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
-		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
+		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " -> " + ruleName +  rhs.map(_.toString).fold("")(joinStringsBy(" "))
 		override def toString = asString("", 0)
 		var matched = false
+    def ruleName = RuleName(lhs, tag)
 	}
 	type GrammarRules = List[GrammarRule]
 	type RHS = List[GrammarAtom]

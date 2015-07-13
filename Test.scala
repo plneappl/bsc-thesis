@@ -25,9 +25,11 @@ object Test{
     GrammarRule(f, List(leftBrace, c, rightBrace), "6")
     )
   val rulesLR = List(
-    GrammarRule(s, List(s, plus, f), "1"),
-    GrammarRule(s, List(f), "2"),
-    GrammarRule(f, List(IntegerTerminal), "3")
+    GrammarRule(c, List(c, plus, s), "1"),
+    GrammarRule(c, List(s), "2"),
+    GrammarRule(s, List(s, mul, f), "3"),
+    GrammarRule(s, List(f), "4"),
+    GrammarRule(f, List(IntegerTerminal), "5")
     )
   
   val g1 = Grammar(c, rules1)
@@ -50,7 +52,9 @@ object Test{
     a.InputFile.run() match {
       case Success(exprAst) => {
         val (gTrans, psns) = applyTransformerFile(gLR)(exprAst)
-        println("Result: \n" + exprAst + "\n---------------\n\n")
+        println("Transformer: \n" + exprAst + "\n---------------\n\n")
+        println("Starting Grammar: \n" + gLR + "\n---------------\n\n")
+        println("Transformed Grammar: \n")
         println(gTrans)
         println("Patterns:\n------------\n")
         psns foreach println

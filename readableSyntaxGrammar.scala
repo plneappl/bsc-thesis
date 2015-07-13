@@ -12,19 +12,19 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   
   def InputFile: Rule1[TransformerFile] = rule {
     startNonterminal ~ commentNL ~ 
-    oneOrMore(transformerBlock).separatedBy(commentNL) ~ commentNL ~ EOI ~> 
+    oneOrMore(transformerBlock) ~ optional(commentNL) ~ EOI ~> 
     ((s: StartNonterminal, tbs: Seq[TransformerBlock]) => TransformerFile(s, tbs.toList))
   }
   
   def transformerBlock: Rule1[TransformerBlock] = rule { 
     (
       t_begin ~ commentNL ~ 
-      zeroOrMore(declaration).separatedBy(commentNL)  ~ commentNL ~ 
-      zeroOrMore(transformerBlock).separatedBy(commentNL) ~ 
-      zeroOrMore(matcherAndTransformer).separatedBy(commentNL) ~ commentNL ~ 
-      t_end
+      zeroOrMore(declaration) ~  
+      zeroOrMore(transformerBlock) ~ 
+      zeroOrMore(matcherAndTransformer) ~ 
+      t_end ~ commentNL
     ) ~> (
-      (decls: Seq[BeginPart], tbs: Seq[TransformerBlock], mat: Seq[TransformerAndPatterns]) => 
+      (decls: Seq[TransformerDeclaration], tbs: Seq[TransformerBlock], mat: Seq[TransformerAndPatterns]) => 
         TransformerBlock(tbs.toList, decls.toList, mat.toList)
     ) 
   }
@@ -32,27 +32,27 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   
   def matcherAndTransformer = rule {
     t_in ~ commentNL ~ 
-    ruleMatchers ~  commentNL ~
-    t_out ~ commentNL ~ 
-    ruleMatchers ~  commentNL ~
-    t_pattern ~ t_space ~ typeEquiv ~ commentNL ~ 
-    patterns ~> ((rmtsIn, rmtsOut, teq, patns) => {
-      TransformerAndPatterns(TransformerRule(rmtsIn.toList, rmtsOut.toList), teq, patns.toList)
+    ruleMatchers ~ 
+    t_out ~ commentNL ~
+    ruleMatchers ~ 
+    patterns ~> ((rmtsIn, rmtsOut, patns) => {
+      TransformerAndPatterns(TransformerRule(rmtsIn.toList, rmtsOut.toList), patns.toList)
     })
   } 
     
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
   def commentEOL   = rule { optional(t_optspace ~ "//" ~ (!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
       
-  def ruleMatchers = rule { oneOrMore(ruleMatcher).separatedBy(commentNL) ~> (l => l.flatten) }
-  def patterns     = rule { zeroOrMore(pattern).separatedBy(commentNL) }
+  def ruleMatchers = rule { oneOrMore(ruleMatcher).separatedBy(commentNL) ~ commentNL ~> (l => l.flatten) }
+  def patterns     = rule { optional(t_pattern ~ commentNL ~ zeroOrMore(pattern).separatedBy(commentNL) ~ commentNL) ~> 
+    ((x: Option[Seq[PatternSynonym]]) => x match {case Some(l) => l; case None => Seq()}) }
   def startNonterminal = rule { "start" ~ t_space ~ t_nt ~> (x => StartNonterminal(Nonterminal(x))) }
   def typeEquiv    = rule { t_nt ~ t_space ~ "=" ~ t_space ~ t_nt ~> ((n1, n2) => TypeEquiv(Nonterminal(Symbol(n1)), Nonterminal(Symbol(n2)))) }
   
   def t_anyspace   = CharPredicate("\n\r\t ")
   def t_newLine    = CharPredicate("\n\r")
   
-  def declaration = rule { nameBinding | nameGen | (t_nt ~> (n => NonterminalDeclaration(Nonterminal(n)))) }
+  def declaration = rule { (nameBinding | nameGen | (t_nt ~> (n => NonterminalDeclaration(Nonterminal(n))))) ~ commentNL }
   def ruleMatcher = rule { 
     t_nt ~ t_space ~ wspStr("-> ") ~ ruleMatcherRHSes ~> (
     (n, rhses) => 
@@ -96,14 +96,25 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def patternLit = rule { (t_literal ~> (t => PatternTerminal("", Terminal(t)))) }
   
   def ruleName    = rule { (t_nt ~ "_" ~ t_num) ~> ((n, i) => RuleName(Nonterminal(Symbol(n)), i))}
-  def nameBinding = rule { (
-      t_nt   ~> (x => NonterminalMatcher(x, "", false))
-    | t_term ~> (x => TerminalMatcher(x, ""))
-  ) ~ t_optspace ~ t_equal ~ t_optspace ~ (
-      t_nt      ~> ((s: String) => Nonterminal(s))
-    | t_literal ~> ((s: String) => Terminal(s))
-  ) ~> ((w, t) => NameBinding(w, t))}
-  def nameGen     = rule { ruleName ~ t_equal  ~ capture(oneOrMore(CharPredicate.AlphaNum)) ~ capture(oneOrMore(t_space ~ CharPredicate.AlphaNum)) ~> ((rn, fun, args) => NameGen(rn, fun, args.split(" \t").toList))}
+  def nameBinding = rule { 
+    (
+        t_nt   ~> (x => NonterminalMatcher(x, "", false))
+      | t_term ~> (x => TerminalMatcher(x, ""))
+    ) ~ t_optspace ~ t_equal ~ t_optspace ~ 
+    (
+        t_nt      ~> ((s: String) => Nonterminal(s))
+      | t_literal ~> ((s: String) => Terminal(s))
+    ) ~> ((w, t) => NameBinding(w, t))
+  }
+  def nameGen     = rule { 
+    ruleName ~ t_space ~ t_equal ~ t_space ~ 
+    capture(oneOrMore(CharPredicate.AlphaNum)) ~ t_space ~
+    oneOrMore(!t_anyspace ~ capture(oneOrMore(CharPredicate.Visible))).separatedBy(t_space) ~ t_optspace ~> 
+    ((lhs, fun, args) => NameGen(lhs, fun, args.toList))
+  }
+  
+  def rnToNtm(rn: RuleName) = NonterminalMatcher(rn.typ.toString, rn.name, false)
+  
   def rhsAtom     = rule { 
       recursive | nt | ((      
           (t_term             ~> ((s: String) => TerminalMatcher(s, "")))
@@ -152,7 +163,7 @@ object ReadableSyntaxGrammar{
     tbs.mkString("\n")
   }
   
-  case class TransformerBlock(more: List[TransformerBlock], thisDecls: BeginParts, thisOne: List[TransformerAndPatterns]){
+  case class TransformerBlock(more: List[TransformerBlock], thisDecls: TransformerDeclarations, thisOne: List[TransformerAndPatterns]){
     def asString(indent: String): String = {
       val indent2 = indent + "  "
       indent + "begin\n" + 
@@ -165,11 +176,11 @@ object ReadableSyntaxGrammar{
     override def toString = asString("")
   }  
   
-  case class TransformerAndPatterns(transformer: TransformerRule, patternType: TypeEquiv, patterns: PatternSynonyms) {
+  case class TransformerAndPatterns(transformer: TransformerRule, patterns: PatternSynonyms) {
     def asString(indent: String) = {
       val indent2 = indent + "  "
       transformer.asString(indent2) + "\n" +
-      indent + "pattern " + patternType.toString + "\n" + 
+      indent + "pattern" + "\n" + 
       indent2 + patterns.mkString("\n" + indent2)
     }
     
@@ -179,21 +190,21 @@ object ReadableSyntaxGrammar{
     override def toString = a + " = " + b
   }
 
-  sealed trait BeginPart{ def asString(indent: String): String; override def toString = asString("") }
-  type BeginParts = List[BeginPart]
-  case class NameBinding(what: TransformerAtom, to: GrammarAtom) extends BeginPart { 
+  sealed trait TransformerDeclaration { def asString(indent: String): String; override def toString = asString("") }
+  type TransformerDeclarations = List[TransformerDeclaration]
+  case class NameBinding(what: TransformerAtom, to: GrammarAtom) extends TransformerDeclaration { 
     def asString(indent: String) = indent + what + " = " + to
   }
   
   case class StartNonterminal(s: Nonterminal) {
     override def toString = "Start: " + s
   }
-  case class NonterminalDeclaration(s: Nonterminal) extends BeginPart {
+  case class NonterminalDeclaration(s: Nonterminal) extends TransformerDeclaration {
     def asString(indent: String) = indent + s
   }
   
-  case class NameGen(typeFor: RuleName, fun: String, args: List[String]) extends BeginPart { 
-    def asString(indent: String) = typeFor + " = " + fun + " " + args.mkString(" ")
+  case class NameGen(lhs: RuleName, fun: String, args: List[String]) extends TransformerDeclaration { 
+    def asString(indent: String) = lhs + " = " + fun + " " + args.mkString(" ")
   }
   
   case class RuleName(typ: Nonterminal, name: String) {

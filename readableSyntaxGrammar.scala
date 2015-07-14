@@ -52,7 +52,14 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_anyspace   = CharPredicate("\n\r\t ")
   def t_newLine    = CharPredicate("\n\r")
   
-  def declaration = rule { (nameBinding | nameGen | (t_nt ~> (n => NonterminalDeclaration(Nonterminal(n))))) ~ commentNL }
+  def declaration = rule { (
+      nameBinding 
+    | nameGen 
+    | (
+        t_nt ~> (n => NTMatcherDeclaration(NonterminalMatcher(n, ""))) ~ 
+        optional("_" ~ t_alphaNum ~> ((x: NTMatcherDeclaration, i) => NTMatcherDeclaration(x.s.copy(i))))
+      )
+    ) ~ commentNL }
   def ruleMatcher = rule { 
     t_nt ~ t_space ~ wspStr("-> ") ~ ruleMatcherRHSes ~> (
     (n, rhses) => 
@@ -95,7 +102,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def patternVar = rule { (t_variable ~> PatternAtomPrototype) }
   def patternLit = rule { (t_literal ~> (t => PatternTerminal("", Terminal(t)))) }
   
-  def ruleName    = rule { (t_nt ~ "_" ~ t_num) ~> ((n, i) => RuleName(Nonterminal(Symbol(n)), i))}
+  def ruleName    = rule { (t_nt ~ "_" ~ t_alphaNum) ~> ((n, i) => RuleName(Nonterminal(Symbol(n)), i))}
   def nameBinding = rule { 
     (
         t_nt   ~> (x => NonterminalMatcher(x, "", false))
@@ -108,8 +115,8 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   }
   def nameGen     = rule { 
     ruleName ~ t_space ~ t_equal ~ t_space ~ 
-    capture(oneOrMore(CharPredicate.AlphaNum)) ~ t_space ~
-    oneOrMore(!t_anyspace ~ capture(oneOrMore(CharPredicate.Visible))).separatedBy(t_space) ~ t_optspace ~> 
+    t_alphaNum ~ t_space ~
+    oneOrMore(t_visible).separatedBy(t_space) ~ t_optspace ~> 
     ((lhs, fun, args) => NameGen(lhs, fun, args.toList))
   }
   
@@ -141,6 +148,8 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_term             = rule { !reservedLower ~ capture(CharPredicate.LowerAlpha ~ zeroOrMore(CharPredicate.AlphaNum)) }
   def t_variable         = rule { capture(oneOrMore(CharPredicate.LowerAlpha)) }
   def t_num              = rule { capture(oneOrMore(CharPredicate.Digit)) }
+  def t_alphaNum         = rule { capture(oneOrMore(CharPredicate.AlphaNum)) }
+  def t_visible          = rule { capture(oneOrMore(CharPredicate.Visible)) }
   def t_int              = """<int>"""
   def t_newLines         = rule {  oneOrMore(CharPredicate("\n\r")) }
   def t_optNewLines      = rule { zeroOrMore(CharPredicate("\n\r")) }
@@ -199,7 +208,7 @@ object ReadableSyntaxGrammar{
   case class StartNonterminal(s: Nonterminal) {
     override def toString = "Start: " + s
   }
-  case class NonterminalDeclaration(s: Nonterminal) extends TransformerDeclaration {
+  case class NTMatcherDeclaration(s: NonterminalMatcher) extends TransformerDeclaration {
     def asString(indent: String) = indent + s
   }
   
@@ -209,6 +218,7 @@ object ReadableSyntaxGrammar{
   
   case class RuleName(typ: Nonterminal, name: String) {
     override def toString = typ + "_" + name
+    def toNonterminalMatcher = NonterminalMatcher(typ.toString, name)
   }
   
   

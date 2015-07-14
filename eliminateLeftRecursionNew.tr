@@ -1,4 +1,4 @@
-start S1
+start A
 begin
   S1 = A
   begin

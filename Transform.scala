@@ -16,13 +16,66 @@ object Transform {
   
   type RuleNameTable = Map[RuleName, RuleName]
   type NameTable     = Map[String, String]
+  type DeclaredVars  = Set[TransformerAtom]
 
   def applyTransformerFile(to: Grammar)(file: TransformerFile): (Grammar, PatternSynonyms) = {
+    checkDeclaredVars(file)
     val (grules, patterns) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip
     val grules2 = grules.flatten
     (Grammar(file.s.s, grules2), patterns.flatten)
     
   }
+  
+  def checkDeclaredVars(f: TransformerFile): DeclaredVars = 
+    f.tbs.map(checkDeclaredVars(Set(): DeclaredVars, _)).reduce(_ ++ _)
+    
+  def checkDeclaredVars(decl: DeclaredVars, b: TransformerBlock): DeclaredVars = {
+    var decl2 = decl
+    b.thisDecls.map {
+      case NTMatcherDeclaration(ntm) => decl2 += ntm
+      case NameGen(lhs, _, _) => decl2 += lhs.toNonterminalMatcher
+      case NameBinding(ntm: NonterminalMatcher, _) => decl2 += ntm
+      case _ => {}
+    }
+    decl2 = b.thisOne.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+    b.more.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+    
+  }
+  def checkDeclaredVars(decl: DeclaredVars, tap: TransformerAndPatterns): DeclaredVars = {
+    val decl2 = checkDeclaredVars(decl, tap.transformer)
+    tap.patterns.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+  }
+  def checkDeclaredVars(decl: DeclaredVars, tr: TransformerRule): DeclaredVars = {
+    val decl2 = tr.from.aggregate(decl)(checkDeclaredVars, _ ++ _)
+    tr.to.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+  }
+  def checkDeclaredVars(decl: DeclaredVars, grm: GrammarRuleMatcher): DeclaredVars = {
+    val decl2 = checkDeclaredVars(decl, grm.lhs)
+    grm.rhs.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+  }
+  def checkDeclaredVars(decl: DeclaredVars, a: TransformerAtom): DeclaredVars = {
+    a match {
+      case (_: NonterminalMatcher | _: TerminalMatcher) if(!decl(a)) => { 
+        println("[warn] You didn't declare " + a + ". I'll ignore this.") 
+        decl + a
+      }
+      case _ => decl
+    }
+  }
+  def checkDeclaredVars(decl: DeclaredVars, p: PatternSynonym): DeclaredVars = {
+    val decl2 = checkDeclaredVars(decl, p.lhs) 
+    checkDeclaredVars(decl2, p.rhs)
+  }
+  def checkDeclaredVars(decl: DeclaredVars, p: PatternAtom): DeclaredVars = p match {
+    case TypedPattern(n, pc, typ) => {
+      val decl2 = checkDeclaredVars(decl, NonterminalMatcher(typ.toString, n)) 
+      pc.aggregate(decl2)(checkDeclaredVars, _ ++ _)
+    }
+    case TypedPatternVariable(id, typ, _) => checkDeclaredVars(decl, NonterminalMatcher(typ.toString, id))
+    case _ => {decl}
+  }
+  
+  
   
   def applyTransformerBlock(to: Grammar, prev: SymbolTable = Map())(block: TransformerBlock): List[(GrammarRules, PatternSynonyms)] = {
     var st: SymbolTable = prev
@@ -31,7 +84,7 @@ object Transform {
     block.thisDecls.map {
       case NameBinding(what, to) => {st += ((what, to))}
       case NameGen(typeFor, fun, args) => {}
-      case NonterminalDeclaration(nt) =>  {}
+      case NTMatcherDeclaration(nt) =>  {}
     }
     val more = block.more.map(applyTransformerBlock(to, st)).flatten
     val thisOne = block.thisOne.map(applyMatcherAndTransformer(to, st, block.thisDecls))

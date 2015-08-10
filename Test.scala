@@ -24,6 +24,12 @@ object Test{
     GrammarRule(f, List(IntegerTerminal), "5"),
     GrammarRule(f, List(leftBrace, c, rightBrace), "6")
     )
+  val rules3 = List(
+    GrammarRule(s, List(s, plus, f), "1"),
+    GrammarRule(s, List(f), "2"),
+    GrammarRule(f, List(IntegerTerminal), "3"),
+    GrammarRule(f, List(leftBrace, c, rightBrace), "4")
+    )
   val rulesLR = List(
     GrammarRule(c, List(c, plus, s), "1"),
     GrammarRule(c, List(s), "2"),
@@ -33,7 +39,7 @@ object Test{
     )
   
   val g1 = Grammar(c, rules1)
-  val gLR = Grammar(s, rulesLR)
+  val gLR = Grammar(s, rules3)
   
   //abstract grammar
   val rules2 = List(
@@ -45,7 +51,7 @@ object Test{
     
  
   def main(args: Array[String]): Unit = {
-    val source = scala.io.Source.fromFile("eliminateLeftRecursionNew.tr")
+    val source = scala.io.Source.fromFile("eliminateLeftRecursionNew2.tr")
     val tr = source.mkString
     source.close
     val a = new ReadableSyntaxGrammar(tr)

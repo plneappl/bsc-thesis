@@ -21,12 +21,12 @@
 
 %% f1 is not defined; use integers for it.
 
-rel(s1p(F1, r2), s2(F1)).
+rel(a1(F1, r2), s2(F1)).
 
-rel(s1p(F1, R), s1(s2(F1), plus, F2)) :- relR(R, s2(F2)).
+rel(a1(F1, R), s1(s2(F1), plus, F2)) :- relR(R, s2(F2)).
 
-rel(s1p(F1, R), s1(S1, plus, Fn)) :-
-  rel(s1p(F1, Sp), S1),
+rel(a1(F1, R), s1(S1, plus, Fn)) :-
+  rel(a1(F1, Sp), S1),
   relR(Sp, S),
   relR(R, s1(S, plus, Fn)).
 
@@ -35,17 +35,17 @@ relR(r1(plus, Sp), S) :- rel(Sp, S).
 
 %% tests
 
-%% | ?- rel(s1p(5,r2), s2(5)).
+%% | ?- rel(a1(5,r2), s2(5)).
 %% yes
 
 %% | ?- rel(X, s2(5)).
-%% X = s1p(5,r2) ?
+%% X = a1(5,r2) ?
 %% yes
 
 %% | ?- rel(X, s1(s1(s2(1), plus, 2), plus, 3)).
-%% X = s1p(1,r1(plus,s1p(2,r1(plus,s1p(3,r2))))) ?
+%% X = a1(1,r1(plus,a1(2,r1(plus,a1(3,r2))))) ?
 %% yes
 
-%% | ?- rel(s1p(1,r1(plus,s1p(2,r1(plus,s1p(3,r2))))), Y).
+%% | ?- rel(a1(1,r1(plus,a1(2,r1(plus,a1(3,r2))))), Y).
 %% Y = s1(s1(s2(1),plus,2),plus,3) ?
 %% yes

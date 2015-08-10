@@ -10,3 +10,8 @@ lazy val commonSettings = Seq(
   libraryDependencies += parboiled2
 )
 
+unmanagedJars in Compile <++= baseDirectory map { base =>
+    val baseDirectories = (base / "prologLib") 
+    val customJars = (baseDirectories ** "*.jar")
+    customJars.classpath
+}

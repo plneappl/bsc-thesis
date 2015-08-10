@@ -41,7 +41,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   } 
     
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
-  def commentEOL   = rule { optional(t_optspace ~ "//" ~ (!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
+  def commentEOL   = rule { optional(t_optspace) ~ optional("//" ~ (!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
       
   def ruleMatchers = rule { oneOrMore(ruleMatcher).separatedBy(commentNL) ~ commentNL ~> (l => l.flatten) }
   def patterns     = rule { optional(t_pattern ~ commentNL ~ zeroOrMore(pattern).separatedBy(commentNL) ~ commentNL) ~> 
@@ -50,7 +50,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def typeEquiv    = rule { t_nt ~ t_space ~ "=" ~ t_space ~ t_nt ~> ((n1, n2) => TypeEquiv(Nonterminal(Symbol(n1)), Nonterminal(Symbol(n2)))) }
   
   def t_anyspace   = CharPredicate("\n\r\t ")
-  def t_newLine    = CharPredicate("\n\r")
+  def t_newLine    = CharPredicate("\r\n")
   
   def declaration = rule { (
       nameBinding 
@@ -143,7 +143,9 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_colon            = """:"""    
   def t_pipe             = """|"""
   def t_nt               = rule { capture(CharPredicate.UpperAlpha ~ zeroOrMore(CharPredicate.AlphaNum)) }
-  def t_literal          = rule { "\"" ~ !("\"" | t_newLine) ~ capture(zeroOrMore(ANY)) ~ "\"" }
+  def t_literal          = rule { 
+    ("\"" ~ capture(optional(zeroOrMore(!CharPredicate("\"\n\r") ~ ANY))) ~ "\"") 
+  }
   def t_literalUppercase = rule { capture(oneOrMore(CharPredicate.UpperAlpha)) }
   def t_term             = rule { !reservedLower ~ capture(CharPredicate.LowerAlpha ~ zeroOrMore(CharPredicate.AlphaNum)) }
   def t_variable         = rule { capture(oneOrMore(CharPredicate.LowerAlpha)) }

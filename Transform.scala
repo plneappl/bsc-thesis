@@ -5,6 +5,8 @@ object Transform {
   import collection.mutable.{ ListBuffer, HashMap, MultiMap, Set => MSet }
   import ReadableSyntaxGrammar._
   import scala.reflect.runtime.universe._
+  import PrologInterface.Definition
+  import org.jpl7.{Term, Atom, Variable, Compound}
   
   //case class TransformerBlock(more: List[TransformerBlock], thisDecls: BeginParts, thisOne: List[TransformerAndPatterns])
   //case class case class TransformerAndPatterns(transformer: TransformerRule, patternType: TypeEquiv, patterns: PatternSynonyms)
@@ -104,34 +106,38 @@ object Transform {
           outRules = producedRules ++ outRules
           var patterns = producePatternSynonyms(tap.transformer, matchedRules, producedRules, symTable)
           patternSynonyms = patternSynonyms ++ patterns
-          patternSynonyms = patternSynonyms ++ tap.patterns.map(finalizePattern(_, ruleNameTable, matchedRules, producedRules))
+          val (pss, defs) = tap.patterns.map(finalizePattern(_, ruleNameTable, matchedRules, producedRules)).unzip
+          patternSynonyms = patternSynonyms ++ pss
           
         }
       }
       //we couldn't apply the rule, so we do nothing
       case None => { }
     }  
-    
-    //fill patterns
-    //check pattern type
-    
+        
     (outRules, patternSynonyms.toList)
   }
   
   def getGrammarRuleByName(name: RuleName): GrammarRules => Option[GrammarRule] = _.filter(x => x.tag == name.name && x.lhs == name.typ).headOption
   
-  def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): PatternSynonym = {
-    println(p.lhs.patternName)
-    println(p.rhs.patternName)
+  def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): (PatternSynonym, List[Definition]) = {
+    //println(p)
+    //println(p.lhs.ruleName)
+    //println(mr)
+    //println(pr)
+    //println(p.rhs.ruleName)
+    //println(nt)
     val fromRule = getGrammarRuleByName(nt(p.lhs.ruleName))(mr).get
     val   toRule = getGrammarRuleByName(nt(p.rhs.ruleName))(pr).get
-    println(fromRule)
-    println(toRule)
-    println(p)
-    println("----")
+    //println(fromRule)
+    //println(toRule)
+    //println(p)
+    //println("----")
     val lpc = finalizeTypedPattern(p.lhs, nt, fromRule, mr, pr)
     val rpc = finalizeTypedPattern(p.rhs, nt,   toRule, pr, mr)
-    PatternSynonym(lpc, rpc)
+    val ps = PatternSynonym(lpc, rpc)
+    val defs = patternSynonymToDefinitions(ps, nt, mr, pr)
+    (ps, defs)
   }
   
   
@@ -141,11 +147,10 @@ object Transform {
       pa match {
         case PatternAtomPrototype(id) => {
           ga match {
-            case nt: Nonterminal    => TypedPatternVariable(id, nt, false)
-            case t: Terminal        => PatternTerminal(id, t)
-            case r: Regex           => PatternTerminal(id, r)
-            case IntegerTerminal    => PatternTerminal(id, IntegerTerminal)
-            case Nonterminal        => throw new Exception("How even...") //should not happen
+            case n: Nonterminal    => TypedPatternVariable(id, n, false)               
+            case t: Terminal        => PatternTerminal(id, t)               
+            case r: Regex           => PatternTerminal(id, r)                
+            case IntegerTerminal    => PatternTerminal(id, IntegerTerminal) 
           }
         }
         case tp: TypedPattern => getGrammarRuleByName(nt(tp.ruleName))(rMe) match {
@@ -156,10 +161,78 @@ object Transform {
           }
         }
         case pt: PatternTerminal => pt
-        case tpv: TypedPatternVariable => throw new Exception("How even...")//tpv //should not happen
+        case tpv: TypedPatternVariable => throw new Exception("How even...") //should not happen
       }
     })
     TypedPattern(r.tag, pc, r.lhs)
+  }
+  
+  //rel(a1(XF, YR), s2(XF)).
+  //
+  def patternSynonymToDefinitions(ps: PatternSynonym, nt: RuleNameTable, l: GrammarRules, r: GrammarRules): List[Definition] = {
+    println("===========")
+    println(ps)
+    println()
+    println(nt)
+    println()
+    l.foreach(println)
+    println()
+    r.foreach(println)
+    println()
+    checkVariableTypes(ps)
+    print("rel(")
+    val (t1, l1) = typedPatternToTerm(ps.lhs, ps.rhs, nt, l, r)
+    print(", ")
+    val (t2, l2) = typedPatternToTerm(ps.rhs, ps.lhs, nt, r, l)
+    println(")")
+    println
+    println(t1)
+    println
+    println(t2)
+    println
+    println(Definition(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](t1, t2)), l1 ++ l2))
+    println("===========\n")
+    List()
+  }
+  
+  def checkVariableTypes(ps: PatternSynonym) = {
+    println(ps.lhs.getTypedVars)
+    println(ps.rhs.getTypedVars)
+  }
+  
+  
+  def tpRelName(tp1: TypedPattern, tp2: TypedPattern): String = tpRelName(tp1.typ, tp2.typ)
+  def tpRelName(t1: Nonterminal, t2: Nonterminal) = "rel" + t1 + "to" + t2
+  def typedPatternToTerm(tp: TypedPattern, otp: TypedPattern, nt: RuleNameTable, myR: GrammarRules, r: GrammarRules): (Term, List[Term]) = {
+    val myRule = getGrammarRuleByName(tp.ruleName)(myR).get
+    
+    
+    val x = (tp.patternContent zip myRule.rhs).map(x1 => { val (pa, ga) = x1; pa match {
+      case TypedPatternVariable(id, typ, _) => {
+        (new Variable("V" + id + typ), List())
+      }
+      case PatternTerminal(id, str) => {
+        //(new Atom("T" + str.bare + id), List())
+        (new Variable(str.bare), List())
+      }
+      case tp1@TypedPattern(pn, pc, typ) => {
+        getGrammarRuleByName(tp1.ruleName)(myR) match {
+          case None => {
+            val (t, defs) = typedPatternToTerm(tp1, otp, nt, r, myR)
+            (new Variable("R" + tp1.ruleName), (new Compound(tpRelName(ga.asInstanceOf[Nonterminal], tp1.typ), Array[Term](new Variable("R" + tp1.ruleName), t))) :: defs)
+          }
+          case _ => {
+            typedPatternToTerm(tp1, otp, nt, myR, r)
+          }
+        }
+        
+      }
+      //case x => {println("unmatched: " + x); new Atom("")}
+    }})
+    val (t, defss) = x.unzip
+    print(")")
+    
+    (new Compound("c" + tp.ruleName, t.toArray), defss.flatten)
   }
   
   sealed abstract class TransformerAtom{
@@ -487,16 +560,17 @@ object Transform {
   }
   type PatternSynonyms = List[PatternSynonym]
   
-  sealed trait PatternAtom { def id: String; def getIds: List[String]; def getLength: Int }
+  sealed trait PatternAtom { def id: String; def getIds: List[String]; def getLength: Int; def getTypedVars: List[RuleName] = List() }
   case class PatternAtomPrototype(id: String) extends PatternAtom{
     override def toString = id
     def getIds = List(id)
     def getLength = 1
   }
-  case class TypedPatternVariable(id: String, typ: Nonterminal, rec: Boolean) extends PatternAtom{
+  case class TypedPatternVariable(id: String, typ: Nonterminal, rec: Boolean) extends PatternAtom {
     override def toString = if(id != "") ("(" + id + " :: " + typ + ")") else ("(" + typ + ")")
     def getIds = List(id)
     def getLength = 1
+    override def getTypedVars = List(RuleName(typ, id))
   }
   case class PatternTerminal(id: String, str: GrammarAtom) extends PatternAtom{
     override def toString = "(" + id + " :: " + str + ")"
@@ -510,6 +584,7 @@ object Transform {
     def getLength = patternContent.map(_.getLength).fold(0)(_ + _)
     override def toString = "(" + typ + "_" + patternName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ + ")"
     def ruleName = RuleName(typ, patternName)
+    override def getTypedVars = patternContent.map(_.getTypedVars).flatten
   }
   //Name as String
   //case class TypedPattern(ruleName: String, patternContent: List[PatternAtom], typ: Nonterminal){
@@ -527,7 +602,7 @@ object Transform {
   def lists[T1](n: Int)(l: List[T1]) = l.combinations(n).map(_.permutations).flatten
   def select[T1, T2](n: Int)(l: List[T1])(f: List[T1] => Option[T2]): List[T2] = lists(n)(l).map(f).flatten.toList
 
-  def pairs(max1: Int, max2: Int) = for(i <- (1 to (max1 * max2)).view; j1 <- (1 to max1).view; if(i - j1 >= 1 && i - j1 <= max2)) yield (j1, i - j1)
+  def pairs(max1: Int, max2: Int) = for(i <- (1 to (max1 + max2)).view; j1 <- (1 to max1).view; if(i - j1 >= 1 && i - j1 <= max2)) yield (j1, i - j1)
   
   def getTags(p: TypedPattern): List[String] = {
     p.getIds.filter(_ != "").sorted
@@ -546,6 +621,7 @@ object Transform {
   
   def producePatternSynonyms(tRule: TransformerRule, matchedRules: GrammarRules, producedRules: GrammarRules, symbolTable: SymbolTable): PatternSynonyms = {
     var res = Set[PatternSynonym]()
+    
     for((i, j) <- pairs(tRule.from.size, tRule.to.size); 
     		recursiveFrom <- tRule.from;
         recursiveTo <- tRule.to;
@@ -553,7 +629,6 @@ object Transform {
         toRules   <- lists(j)(tRule.to)
         ) {
       //if(((needed.keySet &~ found.keySet) union (found.keySet &~ needed.keySet)).isEmpty && !found.isEmpty) {
-
         var fromRulesPatterns      = fromRules.map(x => translateRule(findMatchingGrammarRule(x,  matchedRules, symbolTable), x, symbolTable))
         var   toRulesPatterns      =   toRules.map(x => translateRule(findMatchingGrammarRule(x, producedRules, symbolTable), x, symbolTable))
         var currentFromPattern     = fromRulesPatterns.head
@@ -569,15 +644,17 @@ object Transform {
         for(currentInsert <- insertInTo  ){
             currentToPattern = replaceAll(  currentToPattern, currentInsert)
         }
-        
-        if(getTags(currentFromPattern) == getTags(currentToPattern) && isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
+        if(getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil &&
+           getTags(currentFromPattern) == getTags(currentToPattern) && 
+           isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
         
         currentFromPattern = recursivePattern(currentFromPattern, recursiveInsertionFrom)
           currentToPattern = recursivePattern(  currentToPattern, recursiveInsertionTo  )
         
-        if(getTags(currentFromPattern) == getTags(currentToPattern)){
+        if(getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil && 
+          getTags(currentFromPattern) == getTags(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
         

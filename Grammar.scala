@@ -1,23 +1,27 @@
 import ReadableSyntaxGrammar.RuleName
 
 object Grammar {  
-	sealed trait GrammarAtom
+	sealed trait GrammarAtom { def bare: String }
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
 		override def toString = sym.name
     def asString(indent: String): String = indent + toString
+    def bare = toString
 	}
-  object Nonterminal extends GrammarAtom{
+  object Nonterminal {
     def apply(s: String): Nonterminal = new Nonterminal(Symbol(s))
   }
   
 	case class Terminal(sym: String) extends GrammarAtom{
 		override def toString = "\"" + sym + "\""
+    def bare = sym
 	}
 	case class Regex(sym: String) extends GrammarAtom{
 		override def toString = "\"" + sym + "\".r"
+    def bare = sym
 	}
 	case object IntegerTerminal extends GrammarAtom{
 		override def toString = "<int>"
+    def bare = "int"
 	}
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){

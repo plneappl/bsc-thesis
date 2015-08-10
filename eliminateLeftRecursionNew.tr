@@ -10,11 +10,12 @@ begin
     pattern
     S_1 (S1_1 a b c) y z = S1_1 a b (S_1 c y z)
   end
-  begin
-    S1_1 = collapse S1 A_1
-    in
-    A -> A_1 <int>
-    out
-    S1 -> S1_1 <int>
-  end
+end
+begin
+  S1 = F
+  S1_1 = collapse S1 A_1
+  in
+  A -> A_1 <int>
+  out
+  S1 -> S1_1 <int>
 end

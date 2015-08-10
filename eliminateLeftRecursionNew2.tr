@@ -7,7 +7,7 @@ begin
     S -> S_1 S t F | S_2 F
     out
     S1 -> S1_1 F R
-    R  -> R_1 t S1 | R_2 "" 
+    R  -> R_2 "" | R_1 t S1  
     pattern
     S_2 x = S1_1 x y
     S_1 (S_2 x) "+" y  = S1_1 x (S_2 y)

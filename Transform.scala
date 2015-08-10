@@ -20,11 +20,11 @@ object Transform {
   type NameTable     = Map[String, String]
   type DeclaredVars  = Set[TransformerAtom]
 
-  def applyTransformerFile(to: Grammar)(file: TransformerFile): (Grammar, PatternSynonyms) = {
+  def applyTransformerFile(to: Grammar)(file: TransformerFile): (Grammar, PatternSynonyms, List[Definition]) = {
     checkDeclaredVars(file)
-    val (grules, patterns) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip
+    val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip3
     val grules2 = grules.flatten
-    (Grammar(file.s.s, grules2), patterns.flatten)
+    (Grammar(file.s.s, grules2), patterns.flatten, defs.flatten)
     
   }
   
@@ -79,7 +79,7 @@ object Transform {
   
   
   
-  def applyTransformerBlock(to: Grammar, prev: SymbolTable = Map())(block: TransformerBlock): List[(GrammarRules, PatternSynonyms)] = {
+  def applyTransformerBlock(to: Grammar, prev: SymbolTable = Map())(block: TransformerBlock): List[(GrammarRules, PatternSynonyms, List[Definition])] = {
     var st: SymbolTable = prev
     
     //beginParts:
@@ -94,10 +94,11 @@ object Transform {
   }
   
   
-  def applyMatcherAndTransformer(to: Grammar, st: SymbolTable, decls: TransformerDeclarations)(tap: TransformerAndPatterns): (GrammarRules, PatternSynonyms) = {
+  def applyMatcherAndTransformer(to: Grammar, st: SymbolTable, decls: TransformerDeclarations)(tap: TransformerAndPatterns): (GrammarRules, PatternSynonyms, List[Definition]) = {
     //apply tap.transformer        
     var outRules = List[GrammarRule]()
     var patternSynonyms = Set[PatternSynonym]()
+    var outDefs = List[Definition]()
     
     applyRule(tap.transformer, to, st, decls) match {
       //if we were able to apply the rule, update our SymbolTable
@@ -106,21 +107,21 @@ object Transform {
           outRules = producedRules ++ outRules
           var patterns = producePatternSynonyms(tap.transformer, matchedRules, producedRules, symTable)
           patternSynonyms = patternSynonyms ++ patterns
-          val (pss, defs) = tap.patterns.map(finalizePattern(_, ruleNameTable, matchedRules, producedRules)).unzip
+          val (pss, defin) = tap.patterns.map(finalizePattern(_, ruleNameTable, matchedRules, producedRules)).unzip
           patternSynonyms = patternSynonyms ++ pss
-          
+          outDefs = defin ::: outDefs
         }
       }
       //we couldn't apply the rule, so we do nothing
       case None => { }
     }  
         
-    (outRules, patternSynonyms.toList)
+    (outRules, patternSynonyms.toList, outDefs)
   }
   
   def getGrammarRuleByName(name: RuleName): GrammarRules => Option[GrammarRule] = _.filter(x => x.tag == name.name && x.lhs == name.typ).headOption
   
-  def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): (PatternSynonym, List[Definition]) = {
+  def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): (PatternSynonym, Definition) = {
     //println(p)
     //println(p.lhs.ruleName)
     //println(mr)
@@ -136,8 +137,8 @@ object Transform {
     val lpc = finalizeTypedPattern(p.lhs, nt, fromRule, mr, pr)
     val rpc = finalizeTypedPattern(p.rhs, nt,   toRule, pr, mr)
     val ps = PatternSynonym(lpc, rpc)
-    val defs = patternSynonymToDefinitions(ps, nt, mr, pr)
-    (ps, defs)
+    val defin = patternSynonymToDefinitions(ps, nt, mr, pr)
+    (ps, defin)
   }
   
   
@@ -169,7 +170,7 @@ object Transform {
   
   //rel(a1(XF, YR), s2(XF)).
   //
-  def patternSynonymToDefinitions(ps: PatternSynonym, nt: RuleNameTable, l: GrammarRules, r: GrammarRules): List[Definition] = {
+  def patternSynonymToDefinitions(ps: PatternSynonym, nt: RuleNameTable, l: GrammarRules, r: GrammarRules): Definition = {
     println("===========")
     println(ps)
     println()
@@ -190,9 +191,10 @@ object Transform {
     println
     println(t2)
     println
-    println(Definition(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](t1, t2)), l1 ++ l2))
+    val defin = Definition(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](t1, t2)), l1 ++ l2)
+    println(defin)
     println("===========\n")
-    List()
+    defin
   }
   
   def checkVariableTypes(ps: PatternSynonym) = {
@@ -213,7 +215,7 @@ object Transform {
       }
       case PatternTerminal(id, str) => {
         //(new Atom("T" + str.bare + id), List())
-        (new Variable(str.bare), List())
+        (new Variable("T" + str.bare + id), List())
       }
       case tp1@TypedPattern(pn, pc, typ) => {
         getGrammarRuleByName(tp1.ruleName)(myR) match {

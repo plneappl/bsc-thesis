@@ -2,6 +2,8 @@ import sext._
 import scala.util.{Failure, Success}
 import org.parboiled2._
 import Transform._
+import PrologInterface._
+import ReadableSyntaxGrammar.RuleName
 
 object Test{
   import Grammar._
@@ -57,13 +59,22 @@ object Test{
     val a = new ReadableSyntaxGrammar(tr)
     a.InputFile.run() match {
       case Success(exprAst) => {
-        val (gTrans, psns) = applyTransformerFile(gLR)(exprAst)
-        println("Transformer: \n" + exprAst + "\n---------------\n\n")
-        println("Starting Grammar: \n" + gLR + "\n---------------\n\n")
-        println("Transformed Grammar: \n")
+        val (gTrans, psns, defs) = applyTransformerFile(gLR)(exprAst)
+        println("Transformer:\n------------" + exprAst + "\n---------------\n\n")
+        println("Starting Grammar:\n------------" + gLR + "\n---------------\n\n")
+        println("Transformed Grammar:\n------------")
         println(gTrans)
-        println("Patterns:\n------------\n")
+        println("\nPatterns:\n------------")
         psns foreach println
+        println("\nDefinitions:\n---------------")
+        defs foreach println
+        println
+        val pli = new PrologInterface
+        
+        val st = parseWithGrammar(gTrans)("1+2")
+        val st2 = Branch(RuleName(s, "2"), List(LeafInteger(5)))
+        pli.loadPLFile("./relation/leftrec2.pl")
+        pli.transformTree(st2, gLR, gTrans) foreach println
       }
       case Failure(e: ParseError) => println("Expr is not valid: " + e.format(tr))
       case Failure(e) => println("Unknown error: " + e)

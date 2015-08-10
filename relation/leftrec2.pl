@@ -21,16 +21,16 @@
 
 %% f1 is not defined; use integers for it.
 
-rel(a1(F1, r2), s2(F1)).
+relStoA(cS_2(F1), cA_1(F1, r2)).
 
-rel(a1(F1, R), s1(s2(F1), plus, F2)) :- relR(R, s2(F2)).
+relStoA(cS_1(cS_2(F1), plus, F2), cA_1(F1, R)) :- relRtoS(cS_2(F2), R).
 
-rel(a1(F1, R), s1(S1, plus, Fn)) :-
-  rel(a1(F1, Sp), S1),
-  relR(Sp, S),
-  relR(R, s1(S, plus, Fn)).
+relStoA(cS_1(S1, plus, Fn), cA_1(F1, R)) :-
+  relStoA(S1, cA_1(F1, Sp)),
+  relRtoS(S, Sp),
+  relRtoS(cS_1(S, plus, Fn), R).
 
-relR(r1(plus, Sp), S) :- rel(Sp, S).
+relRtoS(S, cS_1(plus, Sp)) :- relStoA(S, Sp).
 
 
 %% tests

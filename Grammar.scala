@@ -1,6 +1,7 @@
-import ReadableSyntaxGrammar.RuleName
-
 object Grammar {  
+  
+  import ReadableSyntaxGrammar.RuleName
+  
 	sealed trait GrammarAtom { def bare: String }
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
 		override def toString = sym.name
@@ -45,16 +46,15 @@ object Grammar {
 	def padding(i: String, n: Int) = " " * (n.toString.length - i.length)
 	
 	sealed trait SyntaxTree
-	case class Branch(nt: Symbol, childs: List[SyntaxTree]) extends SyntaxTree
+	case class Branch(rn: RuleName, childs: List[SyntaxTree]) extends SyntaxTree
 	trait Leaf extends SyntaxTree
 	case class LeafString(str: String) extends Leaf
 	case class LeafInteger(i: Int) extends Leaf
 	
 	
-	
 	type Parser[A] = String => Option[(A, String)]
-	def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
-		firstTry(input) orElse secondTry(input)
+  def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
+    firstTry(input) orElse secondTry(input)
   }
     
   def sequence[A, B](parseFirstPart: => Parser[A], parseSecondPart: => Parser[B]): Parser[(A, B)] =
@@ -71,16 +71,16 @@ object Grammar {
       case Some( (result, rest) ) => Some( (postprocessor(result), rest) )
       case None => None
     }
-	implicit class ParserOps[A](self: => Parser[A]) {
+  implicit class ParserOps[A](self: => Parser[A]) {
     def | (that: => Parser[A]): Parser[A] = choice(self, that)
     def ~ [B] (that: => Parser[B]): Parser[(A, B)] = sequence(self, that)
     def ^^ [B] (postprocessor: A => B): Parser[B] = postprocess(self)(postprocessor)
   }
   
   def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduceRight((x, y) => x | y)
-  	
-	def parseString(expected: String): Parser[String] = code => {
-		println("T: trying to match: " + expected)
+    
+  def parseString(expected: String): Parser[String] = code => {
+    println("T: trying to match: " + expected)
     println("T: with:\n" + code.split("\n")(0))
     if (code startsWith expected) Some((expected, code drop expected.length))
     else None
@@ -88,14 +88,14 @@ object Grammar {
   def parseRegex(regex: String): Parser[String] = code => {
     println("R: trying to match: '" + regex + "'")
     println("R: with:            '" + code + "'")
-    val Pattern = s"(?s)($regex)(.*)".r      	
+    val Pattern = s"(?s)($regex)(.*)".r       
     code match {
       case Pattern(groups @ _*) => {
-      	//println("R: matched:       '" + groups.head + "'")
-      	Some((groups.head, groups.last))
+        //println("R: matched:       '" + groups.head + "'")
+        Some((groups.head, groups.last))
       }
       case otherwise => {
-      	None
+        None
       }
     }
   }
@@ -108,46 +108,45 @@ object Grammar {
   def regexParser(r: String): Parser[SyntaxTree] = 
     parseRegex(r) ^^ { x => LeafString(x) }
   
-	def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
-		//(grammar lookup nonterminal).map(_.asString("", 1)).foreach(println)
-		listToOption((grammar lookup nonterminal).map(parseRHS(_, grammar) ^^ {
-      children => Branch(nonterminal.sym, children)
+  def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
+    listToOption((grammar lookup nonterminal).map(r => parseRHS(r, grammar) ^^ {
+      children => Branch(r.ruleName, children)
     }))
   }
-	
-	def parseRHS(rule: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = rule.rhs match {
-		case head :: tail => {
-			//println("rule: " + rule.tag + ": " + rule.asString("", 1))
-			recurseParseRHS(head, GrammarRule(rule.lhs, tail, rule.tag), grammar)
-		}
-		case Nil => {s => Some((Nil, s))}
-	}
-	
-	def recurseParseRHS(head: GrammarAtom, tail: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = { 
-		parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
-			case (t1, t2) => t1 :: t2
-		}
-	}
-	
-	def parseGrammarAtom(head: GrammarAtom, grammar: Grammar): Parser[SyntaxTree] = head match {
-				case nt: Nonterminal => parseNonterminal(nt, grammar)
-				case Terminal(str) => keywordParser(str)
-				case Regex(str) => regexParser(str)
-				case IntegerTerminal => digitsParser
-			}
-			
-	def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
-		var parser = parseNonterminal(g.start, g)
+  
+  def parseRHS(rule: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = rule.rhs match {
+    case head :: tail => {
+      //println("rule: " + rule.tag + ": " + rule.asString("", 1))
+      recurseParseRHS(head, GrammarRule(rule.lhs, tail, rule.tag), grammar)
+    }
+    case Nil => {s => Some((Nil, s))}
+  }
+  
+  def recurseParseRHS(head: GrammarAtom, tail: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = { 
+    parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
+      case (t1, t2) => t1 :: t2
+    }
+  }
+  
+  def parseGrammarAtom(head: GrammarAtom, grammar: Grammar): Parser[SyntaxTree] = head match {
+        case nt: Nonterminal => parseNonterminal(nt, grammar)
+        case Terminal(str) => keywordParser(str)
+        case Regex(str) => regexParser(str)
+        case IntegerTerminal => digitsParser
+      }
+      
+  def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
+    var parser = parseNonterminal(g.start, g)
     parser(str) match {
       case Some((t, rest)) => {
-      	if (rest == "") t
-      	else {
-      		println("Not matched!!\n--------\n" + rest + "\n--------\n")
-      		t
-      	}
+        if (rest == "") t
+        else {
+          println("Not matched!!\n--------\n" + rest + "\n--------\n")
+          t
+        }
       }
       case None => sys.error("Not an Expression: " + str)
       //case None => Branch(Symbol(""), List())
-   	}
+    }
   }
 }

@@ -74,7 +74,27 @@ class PrologInterface {
 }
 object PrologInterface {
   import org.jpl7.{Integer => pInteger, Float => pFloat, _}
-  
+
+  //HACK to load JPL in Linux
+  def unsafeAddDir(dir: String) = try {
+    val field = classOf[ClassLoader].getDeclaredField("usr_paths")
+    field.setAccessible(true)
+    val paths = field.get(null).asInstanceOf[Array[String]]
+    if(!(paths contains dir)) {
+      field.set(null, paths :+ dir)
+      System.setProperty("java.library.path",
+       System.getProperty("java.library.path") +
+       java.io.File.pathSeparator +
+       dir)
+    }
+  } catch {
+    case _: IllegalAccessException =>
+      error("Insufficient permissions; can't modify private variables.")
+    case _: NoSuchFieldException =>
+      error("JVM implementation incompatible with path hack")
+  }
+  //HACK end
+
   case class Definition(lhs: Term, rhs: List[Term]){
     override def toString = lhs + (if(rhs.length > 0) " :-\n\t" else "") + rhs.mkString(",\n\t") + "."
   }

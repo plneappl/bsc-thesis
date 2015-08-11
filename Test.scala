@@ -51,8 +51,16 @@ object Test{
     )
   val g2 = Grammar(a, rules2)
     
- 
+    
+  
+  
   def main(args: Array[String]): Unit = {
+    //HACKY load JPL on Linux  
+    if(!System.getProperty("os.name").startsWith("Windows"))
+      unsafeAddDir("/usr/lib/swi-prolog/lib/amd64")
+    //end HACK
+
+
     val source = scala.io.Source.fromFile("eliminateLeftRecursionNew2.tr")
     val tr = source.mkString
     source.close
@@ -60,8 +68,8 @@ object Test{
     a.InputFile.run() match {
       case Success(exprAst) => {
         val (gTrans, psns, defs) = applyTransformerFile(gLR)(exprAst)
-        println("Transformer:\n------------" + exprAst + "\n---------------\n\n")
-        println("Starting Grammar:\n------------" + gLR + "\n---------------\n\n")
+        println("Transformer:\n------------\n" + exprAst + "\n---------------\n\n")
+        println("Starting Grammar:\n------------\n" + gLR + "\n---------------\n\n")
         println("Transformed Grammar:\n------------")
         println(gTrans)
         println("\nPatterns:\n------------")

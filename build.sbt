@@ -15,3 +15,7 @@ unmanagedJars in Compile <++= baseDirectory map { base =>
     val customJars = (baseDirectories ** "*.jar")
     customJars.classpath
 }
+
+fork := true
+
+

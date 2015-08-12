@@ -2,6 +2,7 @@ import org.parboiled2._
 import shapeless._
 import Grammar.{Terminal, Nonterminal, GrammarAtom}
 import Transform._
+import sext._
 
 class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   import ReadableSyntaxGrammar._
@@ -41,7 +42,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   } 
     
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
-  def commentEOL   = rule { optional(t_optspace) ~ optional("//" ~ (!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
+  def commentEOL   = rule { optional(t_optspace) ~ optional("//" ~ zeroOrMore(!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
       
   def ruleMatchers = rule { oneOrMore(ruleMatcher).separatedBy(commentNL) ~ commentNL ~> (l => l.flatten) }
   def patterns     = rule { optional(t_pattern ~ commentNL ~ zeroOrMore(pattern).separatedBy(commentNL) ~ commentNL) ~> 
@@ -84,19 +85,24 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     ruleName ~ t_space ~ oneOrMore(rhsAtom).separatedBy(t_space) ~> RuleMatcherRHS
   }
   
-  def pattern     = rule { 
+  def pattern = rule { 
       typedPattern ~ t_space ~
       t_equal ~ t_space ~ typedPattern ~> ((p1, p2) => PatternSynonym(p1, p2))
   }
   
   def typedPattern = rule {
-    ruleName ~ t_space ~ patternAtoms ~> ((rn, patms) => TypedPattern(rn.name, patms.toList, rn.typ))
+    (typedPatternVar ~> (tpv => {ExtractorPattern(tpv.id, tpv.typ)})) |
+    (ruleName ~ t_space ~ patternAtoms ~> ((rn, patms) => TypedPattern(rn.name, patms.toList, rn.typ))) 
+  }
+  
+  def typedPatternVar = rule {
+    t_lbrace ~ t_variable ~ t_space ~ t_typeSeparator ~ t_space ~ t_nt ~ t_rbrace ~> ((id, typ) => TypedPatternVariable(id, Nonterminal(typ), false))
   }
   
   def patternAtoms = rule { oneOrMore(patternAtom).separatedBy(t_space) }
   
   def patternAtom: Rule1[PatternAtom] = rule {
-      patternVar | ("(" ~ typedPattern ~ ")") | patternLit 
+      patternVar | ("(" ~ typedPattern ~ ")") | patternLit | typedPatternVar
   }
   
   def patternVar = rule { (t_variable ~> PatternAtomPrototype) }
@@ -142,6 +148,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_rightArrow       = """->"""   
   def t_colon            = """:"""    
   def t_pipe             = """|"""
+  def t_typeSeparator    = """::"""
   def t_nt               = rule { capture(CharPredicate.UpperAlpha ~ zeroOrMore(CharPredicate.AlphaNum)) }
   def t_literal          = rule { 
     ("\"" ~ capture(optional(zeroOrMore(!CharPredicate("\"\n\r") ~ ANY))) ~ "\"") 

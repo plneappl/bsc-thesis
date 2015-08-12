@@ -9,9 +9,12 @@ begin
     S1 -> S1_1 F R
     R  -> R_2 "" | R_1 t S1  
     pattern
-    S_2 x = S1_1 x y
+    S_2 x = S1_1 x (R_2 "")
     S_1 (S_2 x) "+" y  = S1_1 x (S_2 y)
     S_1 (S1_1 x y) t z = S1_1 x (S_1 y t z)
+    (x :: S) = R_1 "+" x
+    //S_1 x "+" y = R_1 "+" (S_1 x "+" y)
+    //S_2 x = R_1 "+" (S_2 x)
   end
   begin
     S1 = F
@@ -20,8 +23,6 @@ begin
     A -> A_1 <int>
     out
     S1 -> S1_1 <int>
-    pattern
-    A_1 x = S1_1 x
   end
 end
 

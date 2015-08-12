@@ -109,33 +109,34 @@ object Transform {
           patternSynonyms = patternSynonyms ++ patterns
           val (pss, defin) = tap.patterns.map(finalizePattern(_, ruleNameTable, matchedRules, producedRules)).unzip
           patternSynonyms = patternSynonyms ++ pss
-          outDefs = defin ::: outDefs
+          outDefs = defin ++ outDefs 
         }
       }
       //we couldn't apply the rule, so we do nothing
       case None => { }
     }  
-        
-    (outRules, patternSynonyms.toList, outDefs)
+    val swaps = patternSynonyms.map(ps => {
+      Definition(
+        new Compound(tpRelName(ps.rhs, ps.lhs), Array[Term](new Variable("Y"), new Variable("X"))),
+        List(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](new Variable("X"), new Variable("Y"))))
+      )
+    }).toSet.toList
+    println(swaps)
+    (outRules, patternSynonyms.toList, outDefs ++ swaps)
   }
   
   def getGrammarRuleByName(name: RuleName): GrammarRules => Option[GrammarRule] = _.filter(x => x.tag == name.name && x.lhs == name.typ).headOption
+  def getGrammarRuleByName(name: Option[RuleName]): GrammarRules => Option[GrammarRule] = grs => name.flatMap(getGrammarRuleByName(_)(grs))
   
   def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): (PatternSynonym, Definition) = {
-    //println(p)
-    //println(p.lhs.ruleName)
-    //println(mr)
-    //println(pr)
-    //println(p.rhs.ruleName)
-    //println(nt)
-    val fromRule = getGrammarRuleByName(nt(p.lhs.ruleName))(mr).get
-    val   toRule = getGrammarRuleByName(nt(p.rhs.ruleName))(pr).get
-    //println(fromRule)
-    //println(toRule)
-    //println(p)
-    //println("----")
-    val lpc = finalizeTypedPattern(p.lhs, nt, fromRule, mr, pr)
-    val rpc = finalizeTypedPattern(p.rhs, nt,   toRule, pr, mr)
+    
+    val fromRule = getGrammarRuleByName(nt.get(p.lhs.ruleName))(mr)
+    val   toRule = getGrammarRuleByName(nt.get(p.rhs.ruleName))(pr)
+
+    //Since ExtractorPattern is a TypedPattern, if we can't get any rule we had an ExtractorPattern.
+    //Then we can use an empty rule of the right type.
+    val lpc = finalizeTypedPattern(p.lhs, nt, fromRule getOrElse GrammarRule(p.lhs.typ, List(), ""), mr, pr)
+    val rpc = finalizeTypedPattern(p.rhs, nt,   toRule getOrElse GrammarRule(p.rhs.typ, List(), ""), pr, mr)
     val ps = PatternSynonym(lpc, rpc)
     val defin = patternSynonymToDefinitions(ps, nt, mr, pr)
     (ps, defin)
@@ -143,12 +144,17 @@ object Transform {
   
   
   def finalizeTypedPattern(side: TypedPattern, nt: RuleNameTable, r: GrammarRule, rMe: GrammarRules, rOther: GrammarRules): TypedPattern = {
-     val pc = (r.rhs zip side.patternContent).map(x => {
+    if(side.isInstanceOf[ExtractorPattern]) {
+        val ep = side.asInstanceOf[ExtractorPattern]
+        val ep2 = new ExtractorPattern(ep.id, nt.find(kv => kv._1.typ == ep.typ).get._2.typ)
+        return ep2
+      }
+    val pc = (r.rhs zip side.patternContent).map(x => {
       val (ga, pa) = (x._1, x._2)
       pa match {
         case PatternAtomPrototype(id) => {
           ga match {
-            case n: Nonterminal    => TypedPatternVariable(id, n, false)               
+            case n: Nonterminal    => TypedPatternVariable(id, n)               
             case t: Terminal        => PatternTerminal(id, t)               
             case r: Regex           => PatternTerminal(id, r)                
             case IntegerTerminal    => PatternTerminal(id, IntegerTerminal) 
@@ -162,7 +168,9 @@ object Transform {
           }
         }
         case pt: PatternTerminal => pt
-        case tpv: TypedPatternVariable => throw new Exception("How even...") //should not happen
+        case tpv: TypedPatternVariable => {
+          TypedPatternVariable(tpv.id, ga.asInstanceOf[Nonterminal])
+        }
       }
     })
     TypedPattern(r.tag, pc, r.lhs)
@@ -180,61 +188,78 @@ object Transform {
     println()
     r.foreach(println)
     println()
-    checkVariableTypes(ps)
-    print("rel(")
-    val (t1, l1) = typedPatternToTerm(ps.lhs, ps.rhs, nt, l, r)
-    print(", ")
-    val (t2, l2) = typedPatternToTerm(ps.rhs, ps.lhs, nt, r, l)
-    println(")")
-    println
-    println(t1)
-    println
-    println(t2)
-    println
-    val defin = Definition(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](t1, t2)), l1 ++ l2)
+
+    val (t1, l1) = typedPatternToTerm(ps.lhs, ps.rhs.getTypedVars.toSet, nt, l, r, false)
+
+    val (t2, l2) = typedPatternToTerm(ps.rhs, ps.lhs.getTypedVars.toSet, nt, r, l, true)
+
+    val defin = Definition(new Compound(tpRelName(ps.lhs, ps.rhs), Array[Term](t1, t2)), (l1 ++ l2).toList)
     println(defin)
     println("===========\n")
     defin
   }
   
-  def checkVariableTypes(ps: PatternSynonym) = {
-    println(ps.lhs.getTypedVars)
-    println(ps.rhs.getTypedVars)
-  }
   
   
   def tpRelName(tp1: TypedPattern, tp2: TypedPattern): String = tpRelName(tp1.typ, tp2.typ)
-  def tpRelName(t1: Nonterminal, t2: Nonterminal) = "rel" + t1 + "to" + t2
-  def typedPatternToTerm(tp: TypedPattern, otp: TypedPattern, nt: RuleNameTable, myR: GrammarRules, r: GrammarRules): (Term, List[Term]) = {
+  def tpRelName(t1: Nonterminal, t2: Nonterminal, flip: Boolean = false) = 
+    if(flip) "rel" + t2 + "to" + t1
+    else "rel" + t1 + "to" + t2
+  def typedPatternToTerm(tp: TypedPattern, otherVars: Set[RuleName], nt: RuleNameTable, myR: GrammarRules, r: GrammarRules, flip: Boolean): (Term, Set[Term]) = {
+    if(tp.isInstanceOf[ExtractorPattern]){
+      val ep = tp.asInstanceOf[ExtractorPattern]
+      return (new Variable("V" + ep.id + ep.typ), Set())
+    }
+    
     val myRule = getGrammarRuleByName(tp.ruleName)(myR).get
-    
-    
-    val x = (tp.patternContent zip myRule.rhs).map(x1 => { val (pa, ga) = x1; pa match {
-      case TypedPatternVariable(id, typ, _) => {
-        (new Variable("V" + id + typ), List())
+    val termAndDefs = (tp.patternContent zip myRule.rhs).map(x1 => { val (pa, ga) = x1; pa match {
+      case tpv@TypedPatternVariable(id, typ, _) => {
+        val myVar = new Variable("V" + id + typ)
+        (
+          myVar, {
+            if(otherVars.contains(tpv.ruleName)) Set()
+            else {
+              val otherVar = otherVars.find(rn => rn.name == id)
+              otherVar match {
+                case Some(otherVar1) => {
+                  var compoundContent = Array[Term](myVar, new Variable("V" + otherVar1.name + otherVar1.typ))
+                  if(flip) compoundContent = compoundContent.reverse
+                  Set(new Compound(tpRelName(typ, otherVar1.typ, flip), compoundContent))
+                }
+                case None => {
+                  println("[warn] Singleton variable: " + myVar)
+                  println("[warn] This could mean that you forgot to match this variable on the other side. I'll ignore this.")
+                  Set()
+                }
+              }
+            }
+          }
+        )
       }
       case PatternTerminal(id, str) => {
-        //(new Atom("T" + str.bare + id), List())
-        (new Variable("T" + str.bare + id), List())
+        //(new Atom("t" + str.bare + id), Set())
+        (new Atom(str.bare), Set())
       }
       case tp1@TypedPattern(pn, pc, typ) => {
         getGrammarRuleByName(tp1.ruleName)(myR) match {
+          //this is not the constructor of our grammar, therefore we have to relate a new temporary variable with it
           case None => {
-            val (t, defs) = typedPatternToTerm(tp1, otp, nt, r, myR)
-            (new Variable("R" + tp1.ruleName), (new Compound(tpRelName(ga.asInstanceOf[Nonterminal], tp1.typ), Array[Term](new Variable("R" + tp1.ruleName), t))) :: defs)
+            //should the subpattern produce any type errors, it should (NOT $flip) the resulting Compounds' sides, since it's on the other side 
+            val (t, defs) = typedPatternToTerm(tp1, otherVars, nt, r, myR, !flip)
+            var compoundContent = Array[Term](new Variable("R" + tp1.ruleName), t)
+            if(flip) compoundContent = compoundContent.reverse
+            (new Variable("R" + tp1.ruleName), defs + (new Compound(tpRelName(ga.asInstanceOf[Nonterminal], tp1.typ, flip), compoundContent)))
           }
           case _ => {
-            typedPatternToTerm(tp1, otp, nt, myR, r)
+            typedPatternToTerm(tp1, otherVars, nt, myR, r, flip)
           }
-        }
-        
+        }       
       }
-      //case x => {println("unmatched: " + x); new Atom("")}
+      case _: PatternAtomPrototype => throw new Exception("Non-allowed code path") 
     }})
-    val (t, defss) = x.unzip
-    print(")")
+    val (t, defs) = termAndDefs.unzip
     
-    (new Compound("c" + tp.ruleName, t.toArray), defss.flatten)
+    (new Compound("c" + tp.ruleName, t.toArray), defs.foldLeft(Set[Term]())((s1, s2) => {s1 ++ s2}))
   }
   
   sealed abstract class TransformerAtom{
@@ -443,7 +468,7 @@ object Transform {
             (st2, rnt + ((prod.ruleName, RuleName(lhs2, name))), us2, GrammarRule(lhs2, rhs, name))
           }
           case None       => {
-            println("[warn] couldn't find " + prod.tag + " in (the lesser) NT: " + nt + ".")
+            println("[warn] couldn't find " + prod.tag + " in the (lesser) NT: " + nt + ".")
             println("[warn] I guessed " + prod.ruleName.name + " based on your production rule.")
             (st2, rnt + ((prod.ruleName, RuleName(lhs2, prod.ruleName.name))), us2, GrammarRule(lhs2, rhs, prod.ruleName.name))
           }
@@ -562,17 +587,23 @@ object Transform {
   }
   type PatternSynonyms = List[PatternSynonym]
   
-  sealed trait PatternAtom { def id: String; def getIds: List[String]; def getLength: Int; def getTypedVars: List[RuleName] = List() }
+  sealed trait PatternAtom { 
+    def id: String 
+    def getIds: List[String]
+    def getLength: Int
+    def getTypedVars: List[RuleName] = List() 
+  }
   case class PatternAtomPrototype(id: String) extends PatternAtom{
     override def toString = id
     def getIds = List(id)
     def getLength = 1
   }
-  case class TypedPatternVariable(id: String, typ: Nonterminal, rec: Boolean) extends PatternAtom {
+  case class TypedPatternVariable(id: String, typ: Nonterminal, rec: Boolean = false) extends PatternAtom {
     override def toString = if(id != "") ("(" + id + " :: " + typ + ")") else ("(" + typ + ")")
     def getIds = List(id)
     def getLength = 1
-    override def getTypedVars = List(RuleName(typ, id))
+    def ruleName = RuleName(typ, id)
+    override def getTypedVars = List(ruleName)
   }
   case class PatternTerminal(id: String, str: GrammarAtom) extends PatternAtom{
     override def toString = "(" + id + " :: " + str + ")"
@@ -588,10 +619,16 @@ object Transform {
     def ruleName = RuleName(typ, patternName)
     override def getTypedVars = patternContent.map(_.getTypedVars).flatten
   }
-  //Name as String
-  //case class TypedPattern(ruleName: String, patternContent: List[PatternAtom], typ: Nonterminal){
-  //  override def toString = ruleName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ
-  //}
+  
+  class ExtractorPattern(epid: String, typ: Nonterminal) extends TypedPattern("KW_EXTRACTOR", List(), typ){
+    override def getTypedVars = List(RuleName(typ, id))
+    override def toString = "(" + id + " :: " + typ + ")"
+    override def id = epid
+  }
+  object ExtractorPattern{
+    def apply(id: String, typ: Nonterminal) = new ExtractorPattern(id, typ)
+    def unapply(x: ExtractorPattern) = Some((x.id, x.typ))
+  }
   
   type SeenTags = MultiMap[String, TransformerSequence]
   def newSeenTags():SeenTags = new HashMap[String, MSet[TransformerSequence]] with MultiMap[String, TransformerSequence]

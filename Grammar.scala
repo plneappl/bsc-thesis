@@ -45,11 +45,21 @@ object Grammar {
 	def joinStringsBy(join: String)(a: Any, b: Any) = a + join + b
 	def padding(i: String, n: Int) = " " * (n.toString.length - i.length)
 	
-	sealed trait SyntaxTree
-	case class Branch(rn: RuleName, childs: List[SyntaxTree]) extends SyntaxTree
-	trait Leaf extends SyntaxTree
-	case class LeafString(str: String) extends Leaf
-	case class LeafInteger(i: Int) extends Leaf
+	sealed trait SyntaxTree{
+    def asString(indent: String): String
+    override def toString = asString("")
+  }
+	case class Branch(rn: RuleName, childs: List[SyntaxTree]) extends SyntaxTree {
+    def asString(indent: String) = indent + "Branch: " + rn + "\n" + 
+      childs.map(_.asString(indent + "  ")).mkString("\n")
+  }
+	sealed trait Leaf extends SyntaxTree
+	case class LeafString(str: String) extends Leaf {
+    def asString(indent: String) = indent + "StrLeaf: " + str
+  }
+	case class LeafInteger(i: Int) extends Leaf {
+    def asString(indent: String) = indent + "IntLeaf: " + i
+  }
 	
 	
 	type Parser[A] = String => Option[(A, String)]

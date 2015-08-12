@@ -27,7 +27,8 @@ class PrologInterface {
     println("tempfile: " + fileName)
     val file = new File(fileName)
     val bw = new BufferedWriter(new FileWriter(file))
-    definitionsToWrite.map(_.toString).map(bw.write)
+    bw.write(iterativeDeepening)
+    definitionsToWrite.map(_.toString.replace("+", "plus")).map(x=>{bw.write(x); bw.write("\n")})
     bw.close
     
     loadPLFile(fileName)
@@ -37,17 +38,31 @@ class PrologInterface {
   
   def addDefinition(d: Definition) = (definitionsToWrite = d :: definitionsToWrite)
   
-  def transformTree(t: SyntaxTree, g1: Grammar, g2: Grammar): Array[SyntaxTree] = {
+  //transforms a tree of g1 to the equivalent of g2
+  def transformTree(t: SyntaxTree, g1: Grammar, g2: Grammar): List[SyntaxTree] = {
     val X = new Variable("X")
-    println(treeToTerm(t))
-    val q = new Query(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X))
-    val sols = q.allSolutions
-    //sols foreach println
-    sols.map(sol => termToTree(sol.get("X"), sol)).flatten
+    //println(treeToTerm(t))
+    var limit = 2
+    var ret = List[SyntaxTree]()
+    var continue = true
+    do {
+      val q = new Query("iterative", Array[Term](new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), new pInteger(limit)))
+      //println(q)
+      val sols = q.allSolutions
+      //sols foreach println
+      ret = sols.map(sol => termToTree(sol.get("X"), sol)).flatten.toList
+      limit = limit + 2
+      if(ret.isEmpty){
+        println("Haven't found anything. Setting limit = " + limit + ". Continue? [Y/n]")
+        var line: String = null
+        while(line == null) line = readLine
+        if(line == "n") continue = false
+      } else continue = false
+    } while(continue)
+    ret
   }
   
   def treeToTerm(t: SyntaxTree): Term = {
-    //println(t)
     t match {
       case Branch(rn, childs) => new Compound("c" + rn, childs.map(treeToTerm).toArray)
       case LeafString(s) => new Atom(s)
@@ -74,6 +89,25 @@ class PrologInterface {
 }
 object PrologInterface {
   import org.jpl7.{Integer => pInteger, Float => pFloat, _}
+
+  val iterativeDeepening = 
+"""clause_tree(true,_,_) :- !.
+clause_tree(_,D,Limit) :- D > Limit,
+                          !,
+                          fail.  %% reached depth limit
+clause_tree((A,B),D,Limit) :- !,
+                              clause_tree(A,D,Limit),
+                              clause_tree(B,D,Limit).
+clause_tree(A,_,_) :- predicate_property(A,built_in),
+                      !,
+                      call(A).
+clause_tree(A,D,Limit) :- clause(A,B),
+                          D1 is D+1,
+                          clause_tree(B,D1,Limit).
+
+iterative(G,D) :- clause_tree(G,0,D).
+
+"""
 
   //HACK to load JPL in Linux
   def unsafeAddDir(dir: String) = try {

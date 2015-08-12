@@ -81,8 +81,17 @@ object Test{
         
         val st = parseWithGrammar(gTrans)("1+2")
         val st2 = Branch(RuleName(s, "2"), List(LeafInteger(5)))
-        pli.loadPLFile("./relation/leftrec2.pl")
-        pli.transformTree(st2, gLR, gTrans) foreach println
+        defs foreach pli.addDefinition
+        //pli.loadPLFile("./relation/leftrec2.pl")
+        pli.loadDefinitions
+        println("\nInput tree:")
+        println("---------------")
+        println(st)
+        println("\nTransforming...")
+        val transformedTrees = pli.transformTree(st2, gLR, gTrans)
+        println("\nTransformed:")
+        println("---------------")
+        transformedTrees foreach println
       }
       case Failure(e: ParseError) => println("Expr is not valid: " + e.format(tr))
       case Failure(e) => println("Unknown error: " + e)

@@ -8,15 +8,15 @@
 %%
 %% RHS grammar (right recursive)
 %%
-%% S' := F R   (S₁')
-%% R  := + S'  (R₁)
+%% A := F R    (A₁)
+%% R  := + A   (R₁)
 %% R  := ε     (R₂)
 %%
 %% Pattern synonyms:
 %%
-%% pattern S₁' f₁ r₂              =  S₂ f₁
-%% pattern S₁' f₁ (S₂ f₂)         =  S₁ (S₂ f₁) Plus f₂
-%% pattern S₁' f₁ (S₁ s Plus f₉)  =  S₁ (S₁' f₁ s) Plus f₉
+%% pattern A₁ f₁ r₂               =  S₂ f₁
+%% pattern A₁ f₁ (S₂ f₂)          =  S₁ (S₂ f₁) Plus f₂
+%% pattern A₁ f₁ (S₁ s Plus f₉)   =  S₁ (A₁ f₁ s) Plus f₉
 %% pattern R₁ Plus s              =  s :: S
 
 %% f1 is not defined; use integers for it.

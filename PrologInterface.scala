@@ -28,7 +28,7 @@ class PrologInterface {
     val file = new File(fileName)
     val bw = new BufferedWriter(new FileWriter(file))
     bw.write(iterativeDeepening)
-    definitionsToWrite.map(_.toString.replace("+", "plus")).map(x=>{bw.write(x); bw.write("\n")})
+    definitionsToWrite.map(_.toString).map(x=>{bw.write(x); bw.write("\n")})
     bw.close
     
     loadPLFile(fileName)
@@ -42,7 +42,7 @@ class PrologInterface {
   def transformTree(t: SyntaxTree, g1: Grammar, g2: Grammar): List[SyntaxTree] = {
     val X = new Variable("X")
     //println(treeToTerm(t))
-    var limit = 2
+    var limit = 10
     var ret = List[SyntaxTree]()
     var continue = true
     do {
@@ -51,8 +51,8 @@ class PrologInterface {
       val sols = q.allSolutions
       //sols foreach println
       ret = sols.map(sol => termToTree(sol.get("X"), sol)).flatten.toList
-      limit = limit + 2
       if(ret.isEmpty){
+        limit = limit + 2
         println("Haven't found anything. Setting limit = " + limit + ". Continue? [Y/n]")
         var line: String = null
         while(line == null) line = readLine

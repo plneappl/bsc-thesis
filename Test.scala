@@ -88,7 +88,7 @@ object Test{
         println("---------------")
         println(st)
         println("\nTransforming...")
-        val transformedTrees = pli.transformTree(st2, gLR, gTrans)
+        val transformedTrees = pli.transformTree(st, gTrans, gLR)
         println("\nTransformed:")
         println("---------------")
         transformedTrees foreach println

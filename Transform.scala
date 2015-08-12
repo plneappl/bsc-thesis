@@ -206,6 +206,7 @@ object Transform {
     if(flip) "rel" + t2 + "to" + t1
     else "rel" + t1 + "to" + t2
   def typedPatternToTerm(tp: TypedPattern, otherVars: Set[RuleName], nt: RuleNameTable, myR: GrammarRules, r: GrammarRules, flip: Boolean): (Term, Set[Term]) = {
+    //ExtractorPattern special case
     if(tp.isInstanceOf[ExtractorPattern]){
       val ep = tp.asInstanceOf[ExtractorPattern]
       return (new Variable("V" + ep.id + ep.typ), Set())

@@ -24,6 +24,10 @@ object Grammar {
 		override def toString = "<int>"
     def bare = "int"
 	}
+  case object FloatTerminal extends GrammarAtom{
+    override def toString = "<float>"
+    def bare = "float"
+  }
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
 		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " -> " + ruleName +  rhs.map(_.toString).fold("")(joinStringsBy(" "))
@@ -60,6 +64,9 @@ object Grammar {
 	case class LeafInteger(i: Int) extends Leaf {
     def asString(indent: String) = indent + "IntLeaf: " + i
   }
+  case class LeafFloat(f: Double) extends Leaf {
+    def asString(indent: String) = indent + "FloatLeaf: " + f
+  }
 	
 	
 	type Parser[A] = String => Option[(A, String)]
@@ -90,14 +97,14 @@ object Grammar {
   def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduceRight((x, y) => x | y)
     
   def parseString(expected: String): Parser[String] = code => {
-    println("T: trying to match: " + expected)
-    println("T: with:\n" + code.split("\n")(0))
+    //println("T: trying to match: " + expected)
+    //println("T: with:\n" + code.split("\n")(0))
     if (code startsWith expected) Some((expected, code drop expected.length))
     else None
   }
   def parseRegex(regex: String): Parser[String] = code => {
-    println("R: trying to match: '" + regex + "'")
-    println("R: with:            '" + code + "'")
+    //println("R: trying to match: '" + regex + "'")
+    //println("R: with:            '" + code + "'")
     val Pattern = s"(?s)($regex)(.*)".r       
     code match {
       case Pattern(groups @ _*) => {
@@ -114,6 +121,9 @@ object Grammar {
   
   def digitsParser: Parser[SyntaxTree] = 
     parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
+
+  def floatParser: Parser[SyntaxTree] = 
+    parseRegex("[0-9]+\\.[0-9]+") ^^ {x => LeafFloat(x.toDouble) }
     
   def regexParser(r: String): Parser[SyntaxTree] = 
     parseRegex(r) ^^ { x => LeafString(x) }
@@ -143,6 +153,7 @@ object Grammar {
         case Terminal(str) => keywordParser(str)
         case Regex(str) => regexParser(str)
         case IntegerTerminal => digitsParser
+        case FloatTerminal => floatParser
       }
       
   def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {

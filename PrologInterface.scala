@@ -19,7 +19,7 @@ class PrologInterface {
   
   def initializeDefinitions = (definitionsToWrite = List())
   
-  def loadDefinitions = {
+  def loadDefinitions(keepFile: Boolean = false) = {
     var fileName = ""
     do {
       fileName = "temp_" + Random.alphanumeric.take(10).mkString + ".pl"
@@ -33,7 +33,8 @@ class PrologInterface {
     
     loadPLFile(fileName)
     
-    //file.delete
+    if(!keepFile)
+      file.delete
   }
   
   def addDefinition(d: Definition) = (definitionsToWrite = d :: definitionsToWrite)
@@ -67,6 +68,7 @@ class PrologInterface {
       case Branch(rn, childs) => new Compound("c" + rn, childs.map(treeToTerm).toArray)
       case LeafString(s) => new Atom(s)
       case LeafInteger(i) => new pInteger(i)
+      case LeafFloat(f) => new pFloat(f)
     }
   }
 
@@ -123,9 +125,9 @@ iterative(G,D) :- clause_tree(G,0,D).
     }
   } catch {
     case _: IllegalAccessException =>
-      error("Insufficient permissions; can't modify private variables.")
+      sys.error("Insufficient permissions; can't modify private variables.")
     case _: NoSuchFieldException =>
-      error("JVM implementation incompatible with path hack")
+      sys.error("JVM implementation incompatible with path hack")
   }
   //HACK end
 

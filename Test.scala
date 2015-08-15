@@ -30,7 +30,7 @@ object Test{
     GrammarRule(s, List(s, plus, f), "1"),
     GrammarRule(s, List(f), "2"),
     GrammarRule(f, List(IntegerTerminal), "3"),
-    GrammarRule(f, List(leftBrace, c, rightBrace), "4")
+    GrammarRule(f, List(leftBrace, s, rightBrace), "4")
     )
   val rulesLR = List(
     GrammarRule(c, List(c, plus, s), "1"),
@@ -79,11 +79,11 @@ object Test{
         println
         val pli = new PrologInterface
         
-        val st = parseWithGrammar(gTrans)("1+2")
+        val st = parseWithGrammar(gTrans)("1+2+4+3")
         val st2 = Branch(RuleName(s, "2"), List(LeafInteger(5)))
         defs foreach pli.addDefinition
         //pli.loadPLFile("./relation/leftrec2.pl")
-        pli.loadDefinitions
+        pli.loadDefinitions(keepFile = false)
         println("\nInput tree:")
         println("---------------")
         println(st)

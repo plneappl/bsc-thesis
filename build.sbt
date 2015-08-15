@@ -18,4 +18,5 @@ unmanagedJars in Compile <++= baseDirectory map { base =>
 
 fork := true
 connectInput in run := true
+scalacOptions ++= Seq("-unchecked", "-deprecation")
 

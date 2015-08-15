@@ -8,29 +8,29 @@
 %%
 %% RHS grammar (right recursive)
 %%
-%% S' := F R   (S₁')
-%% R  := + S'  (R₁)
+%% A := F R    (A₁)
+%% R  := + A   (R₁)
 %% R  := ε     (R₂)
 %%
 %% Pattern synonyms:
 %%
-%% pattern S₁' f₁ r₂              =  S₂ f₁
-%% pattern S₁' f₁ (S₂ f₂)         =  S₁ (S₂ f₁) Plus f₂
-%% pattern S₁' f₁ (S₁ s Plus f₉)  =  S₁ (S₁' f₁ s) Plus f₉
+%% pattern A₁ f₁ r₂               =  S₂ f₁
+%% pattern A₁ f₁ (S₂ f₂)          =  S₁ (S₂ f₁) Plus f₂
+%% pattern A₁ f₁ (S₁ s Plus f₉)   =  S₁ (A₁ f₁ s) Plus f₉
 %% pattern R₁ Plus s              =  s :: S
 
 %% f1 is not defined; use integers for it.
 
-rel(a1(F1, r2), s2(F1)).
+relStoA(cS_2(F1), cA_1(F1, r2)).
 
-rel(a1(F1, R), s1(s2(F1), plus, F2)) :- relR(R, s2(F2)).
+relStoA(cS_1(cS_2(F1), plus, F2), cA_1(F1, R)) :- relRtoS(cS_2(F2), R).
 
-rel(a1(F1, R), s1(S1, plus, Fn)) :-
-  rel(a1(F1, Sp), S1),
-  relR(Sp, S),
-  relR(R, s1(S, plus, Fn)).
+relStoA(cS_1(S1, plus, Fn), cA_1(F1, R)) :-
+  relStoA(S1, cA_1(F1, Sp)),
+  relRtoS(S, Sp),
+  relRtoS(cS_1(S, plus, Fn), R).
 
-relR(r1(plus, Sp), S) :- rel(Sp, S).
+relRtoS(S, cS_1(plus, Sp)) :- relStoA(S, Sp).
 
 
 %% tests

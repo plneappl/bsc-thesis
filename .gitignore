@@ -3,3 +3,4 @@ target
 /tr.tmLanguage
 /algorithm/*.log
 *~
+temp_*.pl

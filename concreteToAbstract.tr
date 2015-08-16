@@ -1,22 +1,24 @@
+start A
 begin
-  D
-  in
-  A -> B:1 "+" A:2 
-     | B
-  out 
-  D -> D:1 "+" D:2
-  
-  in
-  B -> C:1 "*" B:2 
-     | C
-  out
-  D -> D:1 "*" D:2
-  
-  in
-  C -> "[" A "]" 
-     | <int>:1
-  out
-  D -> <int>:1
+  A = A
+  begin
+    A_1 = collapse A C_1 
+    in
+      C -> C_1 S x C | C_2 S
+    seq
+      A -> A_1 A x A
+    pattern auto
+      C_2 x = (x :: A)
+  end
+  begin
+    in
+      S -> S_1 x B y | S_2 <int>:1
+    out
+      A -> A_2 <int>:1
+    pattern auto
+      S_1 x (S_2 y) z = A_2 y
+  end  
 end
+
 
 

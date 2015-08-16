@@ -40,26 +40,33 @@ class PrologInterface {
   def addDefinition(d: Definition) = (definitionsToWrite = d :: definitionsToWrite)
   
   //transforms a tree of g1 to the equivalent of g2
-  def transformTree(t: SyntaxTree, g1: Grammar, g2: Grammar): List[SyntaxTree] = {
+  def transformTree(t: SyntaxTree, g1: Grammar, g2: Grammar, nonstop: Boolean = false): Set[SyntaxTree] = {
+    println("\nInput tree:")
+    println("---------------")
+    println(t)
+    println("\nTransforming...")
     val X = new Variable("X")
     //println(treeToTerm(t))
     var limit = 10
-    var ret = List[SyntaxTree]()
+    var ret = Set[SyntaxTree]()
     var continue = true
     do {
       val q = new Query("iterative", Array[Term](new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), new pInteger(limit)))
       //println(q)
       val sols = q.allSolutions
       //sols foreach println
-      ret = sols.map(sol => termToTree(sol.get("X"), sol)).flatten.toList
-      if(ret.isEmpty){
+      ret = sols.map(sol => termToTree(sol.get("X"), sol)).flatten.toSet
+      if(ret.isEmpty && !nonstop){
         limit = limit + 2
         println("Haven't found anything. Setting limit = " + limit + ". Continue? [Y/n]")
         var line: String = null
         while(line == null) line = readLine
         if(line == "n") continue = false
-      } else continue = false
+      } else if(!ret.isEmpty) continue = false
     } while(continue)
+    println("\nTransformed:")
+    println("---------------")
+    ret foreach println
     ret
   }
   

@@ -166,8 +166,9 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def rnToNtm(rn: RuleName) = NonterminalMatcher(rn.typ.toString, rn.name, false)
   
   def rhsAtom     = rule { 
-      recursive | nt | ((      
-          (t_term             ~> ((s: String) => TerminalMatcher(s, "")))
+      recursive | ((      
+          (t_nt               ~> (n => NonterminalMatcher(n, "", false)))
+        | (t_term             ~> ((s: String) => TerminalMatcher(s, "")))
         | (t_literal          ~> ((s: String) => LiteralMatcher(s, "")))
         | (str(t_int)         ~ push(IntegerMatcher("")))
     ) ~ identifier) }

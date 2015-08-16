@@ -183,7 +183,8 @@ object Transform {
         }
         //check if the recursive rule is from our side of the transformation. If not, it's on the other side.
         case tp: TypedPattern => getGrammarRuleByName(nt(tp.ruleName))(rMe) match {
-          case Some(r1) if(r1.lhs == tp.typ) => finalizeTypedPattern(tp, nt, r1, rMe, rOther)
+          case Some(r1) => finalizeTypedPattern(tp, nt, r1, rMe, rOther)
+            
           case _                             => {
             val r1 = getGrammarRuleByName(nt(tp.ruleName))(rOther).get
             finalizeTypedPattern(tp, nt, r1, rOther, rMe)

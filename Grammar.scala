@@ -2,6 +2,7 @@ object Grammar {
   
   import ReadableSyntaxGrammar.RuleName
   
+  
 	sealed trait GrammarAtom { def bare: String }
 	case class Nonterminal(sym: Symbol) extends GrammarAtom{
 		override def toString = sym.name
@@ -52,20 +53,29 @@ object Grammar {
 	sealed trait SyntaxTree{
     def asString(indent: String): String
     override def toString = asString("")
+    def depth: Int
+    def unparse: String
   }
 	case class Branch(rn: RuleName, childs: List[SyntaxTree]) extends SyntaxTree {
     def asString(indent: String) = indent + "Branch: " + rn + "\n" + 
       childs.map(_.asString(indent + "  ")).mkString("\n")
+    def depth = childs.map(_.depth).max + 1
+    def unparse = childs.map(_.unparse).mkString("")
   }
-	sealed trait Leaf extends SyntaxTree
+	sealed trait Leaf extends SyntaxTree{
+    def depth = 1
+  }
 	case class LeafString(str: String) extends Leaf {
     def asString(indent: String) = indent + "StrLeaf: " + str
+    def unparse = str
   }
 	case class LeafInteger(i: Int) extends Leaf {
     def asString(indent: String) = indent + "IntLeaf: " + i
+    def unparse = i.toString
   }
   case class LeafFloat(f: Double) extends Leaf {
     def asString(indent: String) = indent + "FloatLeaf: " + f
+    def unparse = f.toString
   }
 	
 	

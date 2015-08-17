@@ -81,7 +81,7 @@ object Transform {
   def applyTransformerFile(to: Grammar)(file: TransformerFile): (Grammar, PatternSynonyms, List[Definition]) = {
     checkDeclaredVars(file)
     val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip3
-    val grules2 = grules.flatten
+    val grules2 = grules.flatten.sortBy(_.tag)
     (Grammar(file.s.s, grules2), patterns.flatten, defs.flatten)
     
   }
@@ -460,6 +460,8 @@ object Transform {
     }
     (st, rnt)
   }
+  
+  
   
   def collapse(lhs: RuleName, st: SymbolTable, rnt: RuleNameTable, a1: String, a2: String): (SymbolTable, RuleNameTable) = {
     val a2split = a2.split("_")

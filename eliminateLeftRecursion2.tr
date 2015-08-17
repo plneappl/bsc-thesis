@@ -1,0 +1,27 @@
+start C1
+begin
+  begin
+    in
+      C -> C_1 C s S | C_2 S
+      S -> S_3 S t F | S_4 F
+    out
+      C1 -> C1_1 S1 s C1 | C1_2 S1
+      S1 -> S1_3 F1 t S1 | S1_4 F1
+    pattern
+      C_1 (C1_1 a b c) y z = C1_1 a b (C_1 c y z)
+      C_1 (C1_2 a) y z     = C1_1 a y (C_2 z)
+      C_2 x = C1_2 x
+      S_3 (S1_3 a b c) y z = S1_3 a b (S_3 c y z)
+      S_3 (S1_4 a) y z     = S1_3 a y (S_4 z)
+      S_4 x = S1_4 x
+  end
+end
+begin
+  in
+    F -> F_1 <int>   | F_2 x C y
+  seq
+    F1 -> F1_1 <int> | F1_2 x C1 y
+  pattern auto
+end
+
+    

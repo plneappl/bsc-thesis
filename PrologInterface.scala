@@ -59,6 +59,8 @@ class PrologInterface {
     val X = new Variable("X")
     //println(treeToTerm(t))
     var limit = List(t.depth, startDepth).max
+    if(!maxDepth.isEmpty)
+      limit = List(limit, maxDepth.get).min
     println(limit)
     var ret = List[SyntaxTree]()
     var continue = true

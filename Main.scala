@@ -1,8 +1,12 @@
 object Main {
   import PrologInterface._
   import scala.util.{Failure, Success}
-  import Grammar.parseWithGrammar
+  import Grammar.{parseWithGrammar, SyntaxTree}
   import org.parboiled2._
+  
+  
+  type TransformerFunction = (SyntaxTree => TransformationResult)
+  
   def main(args: Array[String]): Unit = {
     if(args.length == 0){
       showUsage
@@ -16,21 +20,28 @@ object Main {
       
       val ti = parse[TransformInstructions, TransformInstructionsFile](args(0))(s => new TransformInstructions(s))
       val inputGrammar = parse[GrammarGrammar, Grammar.Grammar](ti.grammar)(s => new GrammarGrammar(s))
-      val (gTrans, fwt, bwt) = transformGrammarWithFile(inputGrammar, ti.transformer)
-      val stOrig = parseWithGrammar(inputGrammar)(ti.input)
-      val stTransformed = fwt(stOrig)
-      val stBackwards = bwt(stTransformed.head)
-      println
-      println("Original input (parsed, then unparsed): ")
-      println(stOrig.unparse)
-      println
-      println("Transformed: ")
-      println(stTransformed.head.unparse)
-      println
-      println("Back again: ")
-      println(stBackwards.head.unparse)
-      println
+      val (gTrans, fwt, bwt) = transformGrammarWithFile(inputGrammar, ti.transformer, maxDepth = Some(8))
+      ti.commands.foreach{
+        case parseWithOriginal(input) => parseTest(inputGrammar, input, fwt, bwt)
+        case parseWithTransformed(input) => parseTest(gTrans, input, bwt, fwt)
+      }
     }
+  }
+  
+  def parseTest(g: Grammar.Grammar, i: String, fwt: TransformerFunction, bwt: TransformerFunction) = {
+    val stOrig = parseWithGrammar(g)(i)
+    val stTransformed = fwt(stOrig)
+    val stBackwards = bwt(stTransformed.head)
+    println
+    println("Input parsed, then unparsed: ")
+    println(stOrig.unparse)
+    println
+    println("Transformed: ")
+    println(stTransformed.head.unparse)
+    println
+    println("Back again: ")
+    println(stBackwards.head.unparse)
+    println
   }
   
   def parse[T <: Parboiled2Parser[X], X](file: String)(implicit factory: (String) => T): X = {

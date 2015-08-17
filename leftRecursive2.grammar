@@ -1,0 +1,4 @@
+start C
+C -> C_1 C "+" S | C_2 S
+S -> S_3 S "*" F | S_4 F
+F -> F_5 "[" C "]" | F_6 <int>

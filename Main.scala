@@ -54,7 +54,7 @@ object Main {
   }
   
   def showUsage: Unit = {
-    println("Usage: Main <TransformInstructions>")
+    println("Usage: Main <TransformInstructions.ti>")
   }
   
   /*

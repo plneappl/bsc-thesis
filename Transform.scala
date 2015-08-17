@@ -170,17 +170,7 @@ object Transform {
     val pc = (r.rhs zip side.patternContent).map(x => {
       val (ga, pa) = (x._1, x._2)
       pa match {
-        case PatternAtomPrototype(id) => {
-          ga match {
-            //for most of the stuff we don't know, what's inside it's node, so we use a variable.
-            case n: Nonterminal  => TypedPatternVariable(id, n)               
-            case r: Regex        => PatternTerminal(id, r)                
-            case IntegerTerminal => PatternInteger(id) 
-            case FloatTerminal   => PatternFloat(id)
-            //only stringTerminals only match one thing, so we can really use a terminal.
-            case t: Terminal     => PatternLiteral(id, t)               
-          }
-        }
+        case PatternAtomPrototype(id) => grammarAtomWithTagToPatternAtom(ga, id)
         //check if the recursive rule is from our side of the transformation. If not, it's on the other side.
         case tp: TypedPattern => getGrammarRuleByName(nt(tp.ruleName))(rMe) match {
           case Some(r1) => finalizeTypedPattern(tp, nt, r1, rMe, rOther)
@@ -368,10 +358,10 @@ object Transform {
     var symbolTable = checkSymbolTable(st, matcher.lhs, grammarRule.lhs)
     for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) {
       (ga, ma) match {
-        case (IntegerTerminal, IntegerMatcher(_)) => {}
-        case (x1: Nonterminal, x2: NonterminalMatcher) => symbolTable = checkSymbolTable(symbolTable, x2, x1)
-        case (x1: Terminal,    x2: TerminalMatcher)    => symbolTable = checkSymbolTable(symbolTable, x2, x1)
-        case (Terminal(str1), LiteralMatcher(str2, _))  if (str1 == str2) => { }
+        case (IntegerTerminal,  IntegerMatcher(_)) => {}
+        case (x1: Nonterminal,  x2: NonterminalMatcher) => symbolTable = checkSymbolTable(symbolTable, x2, x1)
+        case (x1: TerminalLike, x2: TerminalMatcher)    => symbolTable = checkSymbolTable(symbolTable, x2, x1)
+        case (Terminal(str1),   LiteralMatcher(str2, _))  if (str1 == str2) => { }
         case x => {return None}
     }}
     Some(symbolTable)
@@ -889,12 +879,22 @@ object Transform {
   def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
     case id@NonterminalMatcher(_, tag, rec) => TypedPatternVariable(tag, symbolTable(id).asInstanceOf[Nonterminal], rec)
     case LiteralMatcher(m, tag) => PatternLiteral(tag, Terminal(m))
-    case id@TerminalMatcher(_, tag) => PatternLiteral(tag, symbolTable(id))
+    case id@TerminalMatcher(_, tag) => grammarAtomWithTagToPatternAtom(symbolTable(id), tag)
     case IntegerMatcher(tag) => PatternInteger(tag)
     case FloatMatcher(tag) => PatternFloat(tag)
   }
   
   
+  def grammarAtomWithTagToPatternAtom(ga: GrammarAtom, tag: String) = ga match {
+    //for most of the stuff we don't know, what's inside it's node, so we use a variable.
+    case i@IntegerTerminal => PatternInteger(tag)
+    case f@FloatTerminal   => PatternFloat(tag) 
+    case r: Regex          => PatternTerminal(tag, r)
+    case n: Nonterminal    => TypedPatternVariable(tag, n)
+    
+    //only stringTerminals only match one thing, so we can really use a terminal.
+    case t: Terminal       => PatternLiteral(tag, t)
+  }
   
   
 }

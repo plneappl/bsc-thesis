@@ -13,19 +13,21 @@ object Grammar {
     def apply(s: String): Nonterminal = new Nonterminal(Symbol(s))
   }
   
-	case class Terminal(sym: String) extends GrammarAtom{
+  sealed trait TerminalLike extends GrammarAtom
+  
+	case class Terminal(sym: String) extends TerminalLike {
 		override def toString = "\"" + sym + "\""
     def bare = sym
 	}
-	case class Regex(sym: String) extends GrammarAtom{
+	case class Regex(sym: String) extends TerminalLike {
 		override def toString = "\"" + sym + "\".r"
     def bare = sym
 	}
-	case object IntegerTerminal extends GrammarAtom{
+	case object IntegerTerminal extends TerminalLike {
 		override def toString = "<int>"
     def bare = "int"
 	}
-  case object FloatTerminal extends GrammarAtom{
+  case object FloatTerminal extends TerminalLike {
     override def toString = "<float>"
     def bare = "float"
   }

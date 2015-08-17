@@ -12,9 +12,9 @@ begin
   end
   begin
     in
-      S -> S_1 x B y | S_2 <int>:1
+      S -> S_1 x B y | S_2 z:1
     out
-      A -> A_2 <int>:1
+      A -> A_2 z:1
     pattern auto
       S_1 x (y :: B) z = (y :: A)
   end  

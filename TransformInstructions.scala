@@ -1,7 +1,7 @@
 import org.parboiled2._
 import shapeless._
 
-case class TransformInstructionsFile(grammar: String, transformer: String, input: String)
+case class TransformInstructionsFile(grammar: String, transformer: String, commands: List[Command])
 
 class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[TransformInstructionsFile] {
   def wspStr(s: String): Rule0 = rule {
@@ -14,9 +14,15 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
   def InputFile = rule {
     t_literal ~ commentNL ~
     t_literal ~ commentNL ~
-    t_literal ~ optional(commentNL) ~> ((s1, s2, s3) => TransformInstructionsFile(s1, s2, s3))
+    zeroOrMore(command).separatedBy(commentNL) ~
+    optional(commentNL) ~> ((s1: String, s2: String, s3: Seq[Command]) => TransformInstructionsFile(s1, s2, s3.toList))
     
   }
+  
+  def command = rule {(
+      ("gOrig(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithOriginal)    
+    | ("gTran(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithTransformed)   
+  )}  
     
   def t_optspace         = rule { zeroOrMore(CharPredicate(" \t")) }
   def t_newLine    = CharPredicate("\r\n")
@@ -24,3 +30,7 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
     ("\"" ~ capture(optional(zeroOrMore(!CharPredicate("\"\n\r") ~ ANY))) ~ "\"") 
   }  
 }
+
+sealed trait Command
+case class parseWithOriginal(input: String) extends Command
+case class parseWithTransformed(input: String) extends Command

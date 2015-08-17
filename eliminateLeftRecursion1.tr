@@ -1,0 +1,38 @@
+start A
+begin
+  S1 = A
+  begin
+    S1_1 = collapse S1 S_1 
+    S
+    in
+      S -> S_1 S t F | S_2 F
+    out
+      S1 -> S1_1 F R
+      R  -> R_2 "" | R_1 t S1  
+    pattern
+      S_2 x = S1_1 x (R_2 "")
+      S_1 (S_2 x) t y  = S1_1 x (S_2 y)
+      S_1 (S1_1 x y) t z = S1_1 x (S_1 y t z)
+      (x :: S) = R_1 t x
+      //S_1 x "+" y = R_1 "+" (S_1 x "+" y)
+      //S_2 x = R_1 "+" (S_2 x)
+  end
+  begin
+    in
+      A -> A_2 x:1 B y
+    seq
+      A -> A_2 x:1 S1 y
+    pattern auto
+  end
+  begin
+    S1 = F
+    S1_1 = collapse S1 A_1
+    in
+      A -> A_1 <int>:1
+    out
+      S1 -> S1_1 <int>:1
+    pattern
+      A_1 x = S1_1 x
+  end
+end
+

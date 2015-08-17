@@ -8,7 +8,9 @@ uuid: 1856da82-0b73-471e-86bd-66bcd33fbc25
 
 patterns:
 - name: keyword.section
-  match: '(in)|(out)|(seq)|(begin)|(end)|(start)'
+  match: '(in)|(out)|(seq)|(begin)|(end)|(start)|(pattern)'
+- name: keyword.other
+  match: 'auto'
 - name: variable.parameter
   match: '[A-Z][A-Za-z0-9]*'
 - name: comment.line

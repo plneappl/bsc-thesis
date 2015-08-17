@@ -43,6 +43,7 @@ class PrologInterface {
   //TODO: Stream, min/max-depth (optional?); unparse for concrete/abstract
   //TODO: AEs in files, files for use cases
   
+  
   //transforms a tree of g1 to the equivalent of g2
   def transformTree(
     t: SyntaxTree, 
@@ -50,7 +51,7 @@ class PrologInterface {
     g2: Grammar, 
     nonstop: Boolean = false, 
     maxDepth: Option[Int] = None,
-    startDepth: Int = 0): List[SyntaxTree] = {
+    startDepth: Int = 0): TransformationResult = {
     println("\nInput tree:")
     println("---------------")
     println(t)
@@ -122,6 +123,8 @@ object PrologInterface {
   import scala.util.{Failure, Success}
   import org.parboiled2._
   import Transform._
+  
+  type TransformationResult = List[SyntaxTree]
 
   val iterativeDeepening = 
 """clause_tree(true,_,_) :- !.

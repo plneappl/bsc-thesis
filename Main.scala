@@ -20,7 +20,8 @@ object Main {
       val stOrig = parseWithGrammar(inputGrammar)(ti.input)
       val stTransformed = fwt(stOrig)
       val stBackwards = bwt(stTransformed.head)
-      println("Original input (unparsed): ")
+      println
+      println("Original input (parsed, then unparsed): ")
       println(stOrig.unparse)
       println
       println("Transformed: ")
@@ -28,6 +29,7 @@ object Main {
       println
       println("Back again: ")
       println(stBackwards.head.unparse)
+      println
     }
   }
   

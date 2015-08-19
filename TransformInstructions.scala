@@ -13,8 +13,8 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
   
   def InputFile = rule {
     t_literal ~ commentNL ~
-    t_literal ~ commentNL ~
-    zeroOrMore(command).separatedBy(commentNL) ~
+    t_literal ~ 
+    zeroOrMore(commentNL ~ command) ~
     optional(commentNL) ~> ((s1: String, s2: String, s3: Seq[Command]) => TransformInstructionsFile(s1, s2, s3.toList))
     
   }

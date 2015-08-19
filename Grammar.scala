@@ -47,11 +47,11 @@ object Grammar {
     rules.groupBy(_.lhs).toList.map(lhsRules => {
       val lhs = lhsRules._1
       val rules1 = lhsRules._2
-      "  " + lhs + " -> " + rules1.head.ruleName + " " + rules1.head.rhs.mkString(" ") + "\n" + 
+      "  " + lhs + " -> " + rules1.head.ruleName + " " + rules1.head.rhs.mkString(" ") + 
       rules1.tail.map(rule => {
-        (" " * lhs.toString.length) + "    | " + rule.ruleName + " " + 
-        rule.rhs.mkString(" ")}).mkString("\n")  
-    }).mkString("\n") + 
+        "\n" + (" " * lhs.toString.length) + "    | " + rule.ruleName + " " + 
+        rule.rhs.mkString(" ")}).mkString 
+    }).mkString("\n\n") + 
     "\n"
 	}
 	

@@ -26,7 +26,7 @@ class GrammarGrammar(val input: ParserInput) extends Parboiled2Parser[GrammarCC]
   def grammarRuleRHS: Rule1[Seq[GrammarRule]] = rule {
     oneOrMore(
       ruleName ~ t_space ~ oneOrMore(grammarAtom).separatedBy(t_space) ~> ((x, y) => (x, y))
-    ).separatedBy(t_space ~ t_pipe ~ t_space) ~> (
+    ).separatedBy(t_anyspace ~ t_pipe ~ t_anyspace) ~> (
       (rhs: Seq[(RuleName, Seq[GrammarAtom])]) => rhs.map(x => GrammarRule(x._1.typ, x._2.toList, x._1.name))
     )
   }
@@ -69,7 +69,7 @@ class GrammarGrammar(val input: ParserInput) extends Parboiled2Parser[GrammarCC]
   def t_underscore       = """_"""                            
   def t_space            = rule {  oneOrMore(CharPredicate(" \t")) }
   def t_optspace         = rule { zeroOrMore(CharPredicate(" \t")) }
-  def t_anyspace   = CharPredicate("\n\r\t ")
+  def t_anyspace   = rule { oneOrMore(CharPredicate("\n\r\t ")) }
   def t_newLine    = CharPredicate("\r\n")
   
   def reservedLower      = rule { t_int | t_float }

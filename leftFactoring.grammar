@@ -1,0 +1,5 @@
+start S
+S -> S_2 "if " E " then " S " else " S 
+   | S_1 "if " E " then " S 
+   | S_t <int>
+E -> E_T "1" | E_F "0"

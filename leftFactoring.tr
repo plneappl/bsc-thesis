@@ -1,14 +1,21 @@
-start: 
-A
-in:
-A -> B:1 C:2 | B:1 D:3
-D -> d
-out:
-A -> B:1 A1
-A1 -> C:2 | D:3
-D -> d
-
-in:
-B -> b
-out:
-B -> b
+start A
+begin
+  A = A
+  A_1 = collapse A S_1
+  in
+    S -> S_1 tif E:1 tthen S:2
+       | S_2 tif E:1 tthen S:2 te S:3
+       | S_3 tt:4 
+  out
+    A  -> A_1 tif E1:1 tthen A:2 S2 | A_3 tt:4 
+    S2 -> S2_1 te A:3 | S2_2 "" 
+  pattern auto
+end
+begin
+  E1 = E1
+  in
+    E -> E_1 x | E_2 y
+  seq
+    E1 -> E1_1 x | E1_2 y
+  pattern auto
+end

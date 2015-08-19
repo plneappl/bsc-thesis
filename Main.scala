@@ -20,7 +20,7 @@ object Main {
       
       val ti = parse[TransformInstructions, TransformInstructionsFile](args(0))(s => new TransformInstructions(s))
       val inputGrammar = parse[GrammarGrammar, Grammar.Grammar](ti.grammar)(s => new GrammarGrammar(s))
-      val (gTrans, fwt, bwt) = transformGrammarWithFile(inputGrammar, ti.transformer, maxDepth = Some(8))
+      val (gTrans, fwt, bwt) = transformGrammarWithFile(inputGrammar, ti.transformer, maxDepth = Some(80), keepFile = false)
       ti.commands.foreach{
         case parseWithOriginal(input) => parseTest(inputGrammar, input, fwt, bwt)
         case parseWithTransformed(input) => parseTest(gTrans, input, bwt, fwt)

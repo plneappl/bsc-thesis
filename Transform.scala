@@ -82,7 +82,7 @@ object Transform {
     checkDeclaredVars(file)
     val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip3
     val grules2 = grules.flatten.sortBy(_.tag)
-    (Grammar(file.s.s, grules2), patterns.flatten, defs.flatten)
+    (Grammar(file.s.s, grules2.toSet.toList), patterns.flatten, defs.flatten)
     
   }
   def applyTransformerBlock(to: Grammar, prev: SymbolTable = Map())(block: TransformerBlock): List[(GrammarRules, PatternSynonyms, List[Definition])] = {
@@ -766,17 +766,24 @@ object Transform {
         for(currentInsert <- insertInTo  ){
             currentToPattern = replaceAll(  currentToPattern, currentInsert)
         }
-        if(getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil &&
-           getTags(currentFromPattern) == getTags(currentToPattern) && 
-           isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
+        /* patterns may not:
+         * - have unresolved variables (i.e. tags must be the same on both sides)
+         * - have dangling variables (i.e. TypedVariables with no tag, these should all be recursively replaced)
+         * - be recursive (unless explicitely trying to get those)
+         */
+        if(!hasDanglingVariables(currentFromPattern) && !hasDanglingVariables(currentToPattern) &&
+            getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil &&
+            getTags(currentFromPattern) == getTags(currentToPattern) && 
+            isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
         
         currentFromPattern = recursivePattern(currentFromPattern, recursiveInsertionFrom)
           currentToPattern = recursivePattern(  currentToPattern, recursiveInsertionTo  )
         
-        if(getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil && 
-          getTags(currentFromPattern) == getTags(currentToPattern)){
+        if(!hasDanglingVariables(currentFromPattern) && !hasDanglingVariables(currentToPattern) &&
+            getTags(currentFromPattern) != Nil && getTags(currentFromPattern).filter(_ != "") != Nil && 
+            getTags(currentFromPattern) == getTags(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
         
@@ -785,6 +792,15 @@ object Transform {
     }
     numberCountingVariables(res.toList)
     //res.toList
+  }
+    
+  def hasDanglingVariables(t: TypedPattern): Boolean = {
+    t.patternContent.map{
+      case TypedPatternVariable(tag, _, _) if(tag == "") => return true
+      case t: TypedPattern if(hasDanglingVariables(t)) => return true
+      case _ => {}
+    }
+    return false
   }
   
   def isRecursive: TypedPattern => Boolean = ! isNotRecursive(_)

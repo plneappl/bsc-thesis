@@ -1,0 +1,7 @@
+start A
+  E1 -> E1_F "0"
+      | E1_T "1"
+  A -> A_1 "if " E1 " then " A S2
+     | A_t <int>
+  S2 -> S2_1 " else " A
+      | S2_2 ""

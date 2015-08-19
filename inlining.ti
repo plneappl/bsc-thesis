@@ -1,4 +1,4 @@
-"leftFactoring.grammar"
-"leftFactoring.tr"
+"inlining.grammar"
+"inlining.tr"
 gOrig("if 0 then if 1 then 10 else 0")
 //writeGrammar("leftFactored.grammar")

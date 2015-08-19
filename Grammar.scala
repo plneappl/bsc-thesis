@@ -33,7 +33,7 @@ object Grammar {
   }
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
-		def asString(indent: String, max: Int) = indent + padding(tag, max) + tag + " | " + lhs + " -> " + ruleName +  rhs.map(_.toString).fold("")(joinStringsBy(" "))
+		def asString(indent: String, max: Int) = indent + padding(tag, max) + lhs + " -> " + ruleName +  rhs.map(_.toString).fold("")(joinStringsBy(" "))
 		override def toString = asString("", 0)
 		var matched = false
     def ruleName = RuleName(lhs, tag)

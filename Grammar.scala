@@ -33,7 +33,7 @@ object Grammar {
   }
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
-		def asString(indent: String, max: Int) = indent + padding(tag, max) + lhs + " -> " + ruleName +  rhs.map(_.toString).fold("")(joinStringsBy(" "))
+		def asString(indent: String, max: Int) = indent + padding(tag, max) + lhs + " -> " + ruleName +  rhs.map(_.toString).mkString(" ")
 		override def toString = asString("", 0)
 		var matched = false
     def ruleName = RuleName(lhs, tag)
@@ -43,10 +43,16 @@ object Grammar {
 	
 	case class Grammar(start: Nonterminal, rules: GrammarRules){
 		def lookup(nonterminal: Nonterminal): GrammarRules = rules.filter({gr => gr.lhs.sym == nonterminal.sym})
-		override def toString = "Grammar:" +
-			"\n  Start: " + start +
-			"\n  Rules:"  + rules.map(_.asString("    ", rules.length)).fold("")(joinStringsBy("\n")) + 
-			"\n"
+		override def toString = "start " + start + "\n" + 
+    rules.groupBy(_.lhs).toList.map(lhsRules => {
+      val lhs = lhsRules._1
+      val rules1 = lhsRules._2
+      "  " + lhs + " -> " + rules1.head.ruleName + " " + rules1.head.rhs.mkString(" ") + "\n" + 
+      rules1.tail.map(rule => {
+        (" " * lhs.toString.length) + "    | " + rule.ruleName + " " + 
+        rule.rhs.mkString(" ")}).mkString("\n")  
+    }).mkString("\n") + 
+    "\n"
 	}
 	
 	def joinStringsBy(join: String)(a: Any, b: Any) = a + join + b

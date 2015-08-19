@@ -22,6 +22,7 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
   def command = rule {(
       ("gOrig(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithOriginal)    
     | ("gTran(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithTransformed)   
+    | ("writeGrammar(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> writeGrammar)
   )}  
     
   def t_optspace         = rule { zeroOrMore(CharPredicate(" \t")) }
@@ -34,3 +35,4 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
 sealed trait Command
 case class parseWithOriginal(input: String) extends Command
 case class parseWithTransformed(input: String) extends Command
+case class writeGrammar(file: String) extends Command

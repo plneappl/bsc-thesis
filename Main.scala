@@ -3,6 +3,7 @@ object Main {
   import scala.util.{Failure, Success}
   import Grammar.{parseWithGrammar, SyntaxTree}
   import org.parboiled2._
+  import FileIO._
   
   
   type TransformerFunction = (SyntaxTree => TransformationResult)
@@ -24,6 +25,7 @@ object Main {
       ti.commands.foreach{
         case parseWithOriginal(input) => parseTest(inputGrammar, input, fwt, bwt)
         case parseWithTransformed(input) => parseTest(gTrans, input, bwt, fwt)
+        case writeGrammar(file) => writeFile(file, gTrans.toString)
       }
     }
   }
@@ -45,9 +47,8 @@ object Main {
   }
   
   def parse[T <: Parboiled2Parser[X], X](file: String)(implicit factory: (String) => T): X = {
-    val fileHandle = scala.io.Source.fromFile(file)
-    val fileContents = fileHandle.mkString
-    fileHandle.close
+    val fileContents = readFile(file)
+    
     val resultHandler = factory(fileContents)
     resultHandler.InputFile.run() match {
       case Success(x) => x

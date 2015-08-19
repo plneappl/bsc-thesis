@@ -1,10 +1,8 @@
 class PrologInterface {
   import org.jpl7.{Integer => pInteger, Float => pFloat, _}
-  import java.io._
-  import java.nio.file.{Paths, Files}
+  import FileIO._
   import Transform._
   import Grammar._
-  import util.Random
   import PrologInterface._
   import ReadableSyntaxGrammar.RuleName
   
@@ -21,18 +19,10 @@ class PrologInterface {
   def initializeDefinitions = (definitionsToWrite = List())
   
   def loadDefinitions(keepFile: Boolean = false) = {
-    var fileName = ""
-    do {
-      fileName = "temp_" + Random.alphanumeric.take(10).mkString + ".pl"
-    } while(Files.exists(Paths.get(fileName)))
-    println("tempfile: " + fileName)
-    val file = new File(fileName)
-    val bw = new BufferedWriter(new FileWriter(file))
-    bw.write(iterativeDeepening)
-    definitionsToWrite.map(_.toString).map(x=>{bw.write(x); bw.write("\n")})
-    bw.close
     
-    loadPLFile(fileName)
+    val file = writeTempFile(iterativeDeepening + "\n" + definitionsToWrite.mkString("\n"))
+    
+    loadPLFile(file.toString)
     
     if(!keepFile)
       file.delete

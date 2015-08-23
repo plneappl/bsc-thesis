@@ -80,35 +80,57 @@ object Transform {
   //returns the transformed grammar, resulting pattern synonyms and the corresponding prolog definitions.
   def applyTransformerFile(to: Grammar)(file: TransformerFile): (Grammar, PatternSynonyms, List[Definition]) = {
     checkDeclaredVars(file)
-    val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).flatten.unzip3
-    val grules2 = grules.flatten.sortBy(_.tag)
-    (Grammar(file.s.s, grules2.toSet.toList), patterns.flatten, defs.flatten)
+    val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).map(_._2).flatten.unzip3
+    val grules2 = grules.flatten
+    (Grammar(file.s.s, grules2.toSet.toList.sortBy(((r: GrammarRule) => r.tag))), patterns.flatten, defs.flatten)
     
   }
-  def applyTransformerBlock(to: Grammar, prev: SymbolTable = Map())(block: TransformerBlock): List[(GrammarRules, PatternSynonyms, List[Definition])] = {
-    var st: SymbolTable = prev
+  def applyTransformerBlock(to: Grammar, prev: TransformerState = (Set(), Map(), Map()))(block: TransformerBlock): (UsedSymbols, List[(GrammarRules, PatternSynonyms, List[Definition])]) = {
+    
+    //var (us, st, rnt) = generateSymbols(prev, block.thisDecls)
+    var (us, st, rnt) = prev
     
     //beginParts:
-    block.thisDecls.map {
-      case NameBinding(what, to) => {st += ((what, to))}
-      case NameGen(typeFor, fun, args) => {}
-      case NTMatcherDeclaration(nt) =>  {}
-    }
-    val more = block.more.map(applyTransformerBlock(to, st)).flatten
-    val thisOne = block.thisOne.map(applyMatcherAndTransformer(to, st, block.thisDecls))
-    thisOne ++ more
+    //extract all NonterminalMatchers
+    val loopNTDecls = block.thisDecls.map {
+      case NameBinding(what, to) => {st += ((what, to)); None }
+      case NameGen(typeFor, fun, args) => { None }
+      case NTMatcherDeclaration(ntm) =>  { Some(ntm) }
+    }.flatten
+
+    val nonterminals: List[Nonterminal] = (to.rules.map(_.lhs) ++ to.rules.map(_.rhs.filter(x => x.isInstanceOf[Nonterminal]).map(x => x.asInstanceOf[Nonterminal])).flatten).toSet.toList
+
+    //todo: for(ntm <- loopntdecls; nt <- nonterminals) {st2 = st + (ntm, nt); more( ..., st2, ...) ... }
+    val retList = lists(loopNTDecls.length)(nonterminals).map(nts => {
+      val more = block.more.map(b => {
+        val st2 = st ++ (loopNTDecls zip nts)
+        val (us2, x) = applyTransformerBlock(to, (us, st2, rnt))(b)
+        us = us2 
+        x
+      }).flatten
+      val thisOne = block.thisOne.map(b => {
+        val (us2, x1, x2, x3) = applyMatcherAndTransformer(to, (us, st, rnt), block.thisDecls)(b)
+        us = us2
+        (x1, x2, x3)
+      })
+      more ++ thisOne
+    }).flatten.toList
+    (us, retList)
   }
-  def applyMatcherAndTransformer(to: Grammar, st: SymbolTable, decls: TransformerDeclarations)(tap: TransformerAndPatterns): (GrammarRules, PatternSynonyms, List[Definition]) = {
+  def applyMatcherAndTransformer(to: Grammar, state: TransformerState, decls: TransformerDeclarations)(tap: TransformerAndPatterns): (UsedSymbols, GrammarRules, PatternSynonyms, List[Definition]) = {
     var outRules = List[GrammarRule]()
+    var us: UsedSymbols = state._1
     var patternSynonyms = Set[PatternSynonym]()
     var outDefs = List[Definition]()
     
     //apply tap.transformer        
-    applyRule(tap.transformer, to, st, decls) match {
+    applyRule(tap.transformer, to, (us, state._2, state._3), decls) match {
       //if we were able to apply the rule produce patterns and prolog definitions
-      case Some(listOfResultPairs) => {
+      case Some((us2, listOfResultPairs)) => {
+        us ++= us2
         for((matchedRules, symTable, ruleNameTable, producedRules) <- listOfResultPairs){ 
           outRules = producedRules ++ outRules
+          us ++= getSymbols(symTable)
           if(tap.auto) {
             var pss = producePatternSynonyms(tap.transformer, matchedRules, producedRules, symTable)
             var defins = pss.map(patternSynonymToDefinitions(_, ruleNameTable, matchedRules, producedRules))
@@ -130,7 +152,7 @@ object Transform {
       )
     }).toSet.toList
     //println(swaps)
-    (outRules, patternSynonyms.toList, outDefs ++ swaps)
+    (us, outRules, patternSynonyms.toList, outDefs ++ swaps)
   }
   
   //looks for a grammarRule by it's ruleName (for example S_1).
@@ -139,9 +161,6 @@ object Transform {
   
   //replace patternAtomPrototypes with the mapped/matched Nonterminals.
   def finalizePattern(p: PatternSynonym, nt: RuleNameTable, mr: GrammarRules, pr: GrammarRules): (PatternSynonym, Definition) = {
-    println(p)
-    println(p.lhs.ruleName)
-    println(nt)
     val fromRule = getGrammarRuleByName(nt.get(p.lhs.ruleName))(mr)
     val   toRule = getGrammarRuleByName(nt.get(p.rhs.ruleName))(pr)
 
@@ -275,6 +294,17 @@ object Transform {
     def copy(t: String): TransformerAtom
     def copy(f: Boolean): TransformerAtom
   }
+
+  case class AnyMatcher(name: String, tag: String) extends TransformerAtom {
+    def copy(t: String) = AnyMatcher(name, t)
+    def copy(f: Boolean) = AnyMatcher(name, tag)
+    override def toString = "_" + (if(tag != "") name + ":" + tag else name)
+    override def equals(o: Any) = o match {
+      case AnyMatcher(name2, _) => name == name2
+      case _ => false
+    }
+  }
+
   case class NonterminalMatcher(name: String, tag: String, recursive: Boolean = false) extends TransformerAtom {
     override def toString = (if(recursive) "r(" else "") + name +  (if(tag != "") ":" + tag else "") + (if(recursive) ")" else "")
     def copy(t: String) = NonterminalMatcher(name, t, recursive)
@@ -317,12 +347,17 @@ object Transform {
     def copy(t: String)  = FloatMatcher(t)
     def copy(f: Boolean) = FloatMatcher(tag)
   }
+  case class RestMatcher(tag: String) extends TransformerAtom {
+    override def toString = "..." + tag
+    def copy(t: String) = RestMatcher(t)
+    def copy(f: Boolean) = RestMatcher(tag)
+  }
   
   type TransformerSequence = List[TransformerAtom] 
   type TransformerRules    = List[TransformerRule]
   
-  case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence, tag: String) {
-    override def toString = lhs + "_" + tag + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" "))
+  case class GrammarRuleMatcher(lhs: NonterminalMatcher, rhs: TransformerSequence, tag: String, restMatcher: Option[RestMatcher]) {
+    override def toString = lhs + "_" + tag + " ->" + rhs.map(_.toString).fold("")(joinStringsBy(" ")) + (if(restMatcher.nonEmpty) (" " + restMatcher.get.toString) else "")
     def ruleName = RuleName(Nonterminal(lhs.name), tag)
     def getIds: Set[String] = rhs.map(_.tag).filter(_ != "").toSet
   }
@@ -354,19 +389,27 @@ object Transform {
     }}
     
   //match a grammar rule with a matcher one atom at a time  
-  def matches(st: SymbolTable, grammarRule: GrammarRule, matcher: GrammarRuleMatcher): Option[SymbolTable] = if(grammarRule.rhs.size == matcher.rhs.size) try {
-    var symbolTable = checkSymbolTable(st, matcher.lhs, grammarRule.lhs)
-    for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) {
-      (ga, ma) match {
-        case (IntegerTerminal,  IntegerMatcher(_)) => {}
-        case (x1: Nonterminal,  x2: NonterminalMatcher) => symbolTable = checkSymbolTable(symbolTable, x2, x1)
-        case (x1: TerminalLike, x2: TerminalMatcher)    => symbolTable = checkSymbolTable(symbolTable, x2, x1)
-        case (Terminal(str1),   LiteralMatcher(str2, _))  if (str1 == str2) => { }
-        case x => {return None}
-    }}
-    Some(symbolTable)
-  } catch { case e: Throwable => None }
-  else None
+  def matches(st: SymbolTable, grammarRule: GrammarRule, matcher: GrammarRuleMatcher): Option[SymbolTable] = try { 
+    if(grammarRule.rhs.size > matcher.rhs.size && matcher.restMatcher.isDefined) {
+      val st2 = checkSymbolTable(st, matcher.restMatcher.get, GrammarAtomSequence(grammarRule.rhs.drop(matcher.rhs.size)))
+      matches(st2, GrammarRule(grammarRule.lhs, grammarRule.rhs.take(matcher.rhs.size), grammarRule.tag), matcher.copy(restMatcher = None))
+    }
+    else if(grammarRule.rhs.size == matcher.rhs.size && matcher.restMatcher.isEmpty) {
+      var symbolTable = checkSymbolTable(st, matcher.lhs, grammarRule.lhs)
+      for((ga, ma) <- (grammarRule.rhs zip matcher.rhs)) {
+        (ga, ma) match {
+          case (IntegerTerminal,  IntegerMatcher(_)) => {}
+          case (x1: Nonterminal,  x2: NonterminalMatcher) => symbolTable = checkSymbolTable(symbolTable, x2, x1)
+          case (x1: TerminalLike, x2: TerminalMatcher)    => symbolTable = checkSymbolTable(symbolTable, x2, x1)
+          case (Terminal(str1),   LiteralMatcher(str2, _))  if (str1 == str2) => { }
+          case (x1,               x2: AnyMatcher) => symbolTable = checkSymbolTable(symbolTable, x2, x1)
+          case x => {return None}
+      }}
+      Some(symbolTable)
+    } 
+    else None
+  } 
+  catch { case e: Throwable => None }
   
   //find matching grammarRuleMatchers to grammarRules and match them. For each match:
   //produce a ruleNameTable, which tells us which exact grammarRuleMatcher matched which grammarRule,
@@ -396,26 +439,28 @@ object Transform {
     case nt: Nonterminal => nt
   }
 
+  type TransformerState = (UsedSymbols, SymbolTable, RuleNameTable)
+
   //try to match all 'from' rules, on every success: produce 'to' rules
   def applyRule(
     transformerRules: TransformerRule, 
     grammar: Grammar, 
-    startSymbolTable: SymbolTable = Map(), 
-    decls: TransformerDeclarations = List()): Option[List[(GrammarRules, SymbolTable, RuleNameTable, GrammarRules)]] = {
+    state: TransformerState = (Set(), Map(), Map()),
+    decls: TransformerDeclarations = List()): Option[(UsedSymbols, List[(GrammarRules, SymbolTable, RuleNameTable, GrammarRules)])] = {
     //try all combinations of rules and grammar rules with the same number of rules.
     var selectN = select[GrammarRule, (List[GrammarRuleMatcher], SymbolTable, RuleNameTable, NameTable, GrammarRules)](transformerRules.from.length)(grammar.rules) _
-    var matchedRules = selectN(matchRulesToGrammarRules(transformerRules.from, startSymbolTable) _)
+    var matchedRules = selectN(matchRulesToGrammarRules(transformerRules.from, state._2) _)
     
     //produce the out rules
     var out = List[(GrammarRules, SymbolTable, RuleNameTable, GrammarRules)]()
     
-    var usedSymbols: UsedSymbols = Set[Nonterminal]()
+    var usedSymbols: UsedSymbols = getSymbols(state._2).toSet ++ state._1
     for((gMatchers, st, rnt, nt, gRules) <- matchedRules){
-      var (symbolTable, ruleNameTable) = generateSymbols(st, rnt, decls)
+      var (us, symbolTable, ruleNameTable) = generateSymbols((usedSymbols, st, rnt), decls)
       usedSymbols ++= getSymbols(st)
+      usedSymbols ++= us
       var newRules: GrammarRules = List()
       for(rule <- transformerRules.to){
-        
         val (nst, nrnt, nus, r) = makeOutRule(symbolTable, ruleNameTable, nt, rule, usedSymbols, decls)
         symbolTable ++= nst
         ruleNameTable ++= nrnt
@@ -428,7 +473,7 @@ object Transform {
       
     }
     //return produced rules and the SymbolTables
-    Some(out)
+    Some((usedSymbols, out))
   }
   
   
@@ -437,39 +482,54 @@ object Transform {
     //(RuleName, SymbolTable, RuleNameTable, String*) => (SymbolTable, RuleNameTable)
   //String* denotes any number of String arguments.
   //the function should add some entries to these tables (or remove some, why you would do that I don't know).
-  def generateSymbols(symbolTable: SymbolTable, ruleNameTable: RuleNameTable, decls: TransformerDeclarations): (SymbolTable, RuleNameTable) = {
-    var st = symbolTable
-    var rnt = ruleNameTable
+  def generateSymbols(startState: TransformerState, decls: TransformerDeclarations): (UsedSymbols, SymbolTable, RuleNameTable) = {
+    var state = startState
     for(decl <- decls) decl match {
-      case NameGen(lhs, fun, args) => {
+      case NameGen(lhs, fun, args) => try {
         //println(lhs + " = " + fun + " " + args.mkString(" "))
         //println(typeOf[Transform.type].member(newTermName("collapse")).asMethod.paramss)
-        val args2 = lhs :: symbolTable :: rnt :: args
+        val args2 = state :: lhs :: args
         //println("careful, magic: ")     
         val ru = scala.reflect.runtime.universe
         val m = ru.runtimeMirror(getClass.getClassLoader)
         val im = m.reflect(this)
         val methodSym = ru.typeOf[Transform.type].member(ru.newTermName(fun)).asMethod
         val mm = im.reflectMethod(methodSym)
-        val res = mm(args2: _*).asInstanceOf[(SymbolTable, RuleNameTable)]
-        st = res._1
-        rnt = res._2
+        state = mm(args2: _*).asInstanceOf[TransformerState]
+      
         //println("-----------------\n")
+      } catch {
+        case e: Throwable => {
+          println("[warn] your method " + fun + " threw an exception. Please be careful.")
+          println("[warn] " + e)
+        }
       }
       case _ => {}
     }
-    (st, rnt)
+    state
   }
   
   
-  
-  def collapse(lhs: RuleName, st: SymbolTable, rnt: RuleNameTable, a1: String, a2: String): (SymbolTable, RuleNameTable) = {
+  def newName(state: TransformerState, lhs: RuleName, a1: String): TransformerState = {
+    var ntTarget = Nonterminal(a1)
+    val stValues = state._2.values.toList
+    while(stValues.contains(ntTarget) || state._1.contains(ntTarget)){
+      ntTarget = Nonterminal(nextLexicographic(ntTarget.toString))
+    }
+
+    val stEntry = (NonterminalMatcher(lhs.typ.toString, ""), ntTarget)
+    val usEntry = ntTarget
+    
+    (state._1 + usEntry, state._2 + stEntry, state._3)
+  }
+
+  def collapse(state: TransformerState, lhs: RuleName, a1: String, a2: String): TransformerState = {
     val a2split = a2.split("_")
-    val rnTyp = st(NonterminalMatcher(a1, "")).asInstanceOf[Nonterminal]
+    val rnTyp = state._2(NonterminalMatcher(a1, "")).asInstanceOf[Nonterminal]
     val rnVar = RuleName(Nonterminal(a2split(0)), a2split(1))
-    val rnName = rnt(rnVar)
+    val rnName = state._3(rnVar)
     val nrntEntry = ((lhs, RuleName(rnTyp, rnName.name)))
-    (st, rnt + nrntEntry)
+    (state._1, state._2, state._3 + nrntEntry)
   }
   
   //make a new rule by applying the TransformerAtoms one by one, steadily updating the SymbolTable in case a new Nonterminal is introduced
@@ -493,6 +553,9 @@ object Transform {
       us2 = us3
     }
     rhs = rhs.reverse
+    if(prod.restMatcher.nonEmpty){
+      rhs = rhs ++ st(prod.restMatcher.get).asInstanceOf[GrammarAtomSequence].seq
+    }
     
     rnt.get(prod.ruleName) match {
       case Some(name) => (st2, rnt, us2, GrammarRule(lhs2, rhs, name.name))
@@ -515,6 +578,7 @@ object Transform {
   
   //produce a GrammarAtom from a TransformerAtom by looking up in the SymbolTable and adding new IDs
   def applyMatcher(st: SymbolTable, a: TransformerAtom, usedSymbols: UsedSymbols): (SymbolTable, UsedSymbols, GrammarAtom) = {
+     println(st)
      a match {
       case id: NonterminalMatcher => {
         val (st2, us2) = extendSymbolTable(st, id, usedSymbols)
@@ -522,6 +586,7 @@ object Transform {
         (st2, us2, st2(id))
       }
       case id: TerminalMatcher => (st, usedSymbols, st(id))
+      case id: AnyMatcher => (st, usedSymbols, st(id))
 
       case LiteralMatcher(str, _) => (st, usedSymbols, Terminal(str))
       case IntegerMatcher(_) => (st, usedSymbols, IntegerTerminal)
@@ -552,7 +617,8 @@ object Transform {
     (st + ((id, Nonterminal(next))), usedSymbols + Nonterminal(next))
   }
   
-  def symbolTableToTypeTable(st: SymbolTable): Map[String, Nonterminal] = st.toList.filter(_._2.isInstanceOf[Nonterminal]).map(kv => (kv._1.asInstanceOf[NonterminalMatcher].name, kv._2.asInstanceOf[Nonterminal])).toMap
+  //names to types instead of matchers to grammar atoms => subset of the symbolTable
+  def symbolTableToTypeTable(st: SymbolTable): Map[String, Nonterminal] = st.toList.filter(_._1.isInstanceOf[NonterminalMatcher]).map(kv => (kv._1.asInstanceOf[NonterminalMatcher].name, kv._2.asInstanceOf[Nonterminal])).toMap ++ st.toList.filter(x => (x._1.isInstanceOf[AnyMatcher] && x._2.isInstanceOf[Nonterminal])).map(kv => (kv._1.asInstanceOf[AnyMatcher].name, kv._2.asInstanceOf[Nonterminal])).toMap
   
   def getNthVariableName(n: Int): String = {
     var cur = "A"
@@ -602,7 +668,7 @@ object Transform {
     for(rule <- transformer.rules) {
       applyRule(rule, grammar) match {
         //if we were able to apply the rule, update our SymbolTable
-        case Some(listOfResultPairs) => {
+        case Some((_, listOfResultPairs)) => {
           for((matchedRules, symTable, _, producedRules) <- listOfResultPairs){ 
             val (producedRulesTagged, i1) = tagGrammarRules(producedRules, i)
             i = i1
@@ -713,7 +779,9 @@ object Transform {
     res
   }  
   
+  //all sublists of l in all orders
   def lists[T1](n: Int)(l: List[T1]) = l.combinations(n).map(_.permutations).flatten
+  //[Use case] map a function on all sublists of a List l and keep only valid results
   def select[T1, T2](n: Int)(l: List[T1])(f: List[T1] => Option[T2]): List[T2] = lists(n)(l).map(f).flatten.toList
 
   def pairs(max1: Int, max2: Int) = for(i <- (1 to (max1 + max2)).view; j1 <- (1 to max1).view; if(i - j1 >= 1 && i - j1 <= max2)) yield (j1, i - j1)
@@ -734,14 +802,6 @@ object Transform {
   //get the PatternSynonym name by looking up which grammar rule matches the transformerRule
   def producePatternSynonyms(tRule: TransformerRule, matchedRules: GrammarRules, producedRules: GrammarRules, symbolTable: SymbolTable): PatternSynonyms = {
     var res = Set[PatternSynonym]()
-    println(tRule)
-    println
-    println(matchedRules)
-    println
-    println(producedRules)
-    println
-    println(symbolTable)
-    println
     //try and match every fromRule with every toRule
     //match if all variable names are resolved
     for((i, j) <- pairs(tRule.from.size, tRule.to.size); 
@@ -777,7 +837,6 @@ object Transform {
             isNotRecursive(currentFromPattern) && isNotRecursive(currentToPattern)){
           res += PatternSynonym(currentFromPattern, currentToPattern)
         }
-        
         currentFromPattern = recursivePattern(currentFromPattern, recursiveInsertionFrom)
           currentToPattern = recursivePattern(  currentToPattern, recursiveInsertionTo  )
         
@@ -845,17 +904,24 @@ object Transform {
     var stillFree = free
     val newContent = p.patternContent.map(x => x match {
       case TypedPatternVariable(id, str, rec) if(id == cv) => {
+        val nID = stillFree.head
         stillFree = stillFree.tail
-        TypedPatternVariable(stillFree.head.toString, str, rec)
+        TypedPatternVariable(nID.toString, str, rec)
       }
       case PatternTerminal(id, str) if(id == cv) => {
+        val nID = stillFree.head
         stillFree = stillFree.tail
-        PatternTerminal(stillFree.head.toString, str)
+        PatternTerminal(nID.toString, str)
       }
       case t: TypedPattern => {
         val (tp, sf) = numberCountingVariables(t, stillFree, cv)
         stillFree = sf
         tp
+      }
+      case PatternLiteral(id, str) if(id == cv) => {
+        val nID = stillFree.head
+        stillFree = stillFree.tail
+        PatternLiteral(nID.toString, str)
       }
       case x => x
     })
@@ -890,14 +956,27 @@ object Transform {
     return false
   }
   
-  def translateRule(matchedRule: GrammarRule, grammarRuleMatcher:  GrammarRuleMatcher, symbolTable: SymbolTable): TypedPattern = {
-    TypedPattern(matchedRule.tag, grammarRuleMatcher.rhs.map(translatePatternAtom(symbolTable)), symbolTable(grammarRuleMatcher.lhs).asInstanceOf[Nonterminal])
+  def translateRule(matchedRule: GrammarRule, grammarRuleMatcher: GrammarRuleMatcher, symbolTable: SymbolTable): TypedPattern = {
+    val rhs = grammarRuleMatcher.rhs.map(translatePatternAtom(symbolTable)) ++ (
+        if(grammarRuleMatcher.restMatcher.nonEmpty){
+          val gas = symbolTable(grammarRuleMatcher.restMatcher.get).asInstanceOf[GrammarAtomSequence].seq
+          val tags = (Stream from 1).map("...ID" + _.toString)
+          (gas zip tags).map( 
+            x => (
+              grammarAtomWithTagToPatternAtom(x._1, x._2)
+            )
+          )
+        }
+        else List()
+      )
+    TypedPattern(matchedRule.tag, rhs, symbolTable(grammarRuleMatcher.lhs).asInstanceOf[Nonterminal])
   }
   
-  def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom =  x match {
+  def translatePatternAtom(symbolTable: SymbolTable)(x: TransformerAtom): PatternAtom = x match {
     case id@NonterminalMatcher(_, tag, rec) => TypedPatternVariable(tag, symbolTable(id).asInstanceOf[Nonterminal], rec)
     case LiteralMatcher(m, tag) => PatternLiteral(tag, Terminal(m))
     case id@TerminalMatcher(_, tag) => grammarAtomWithTagToPatternAtom(symbolTable(id), tag)
+    case id@AnyMatcher(_, tag) => grammarAtomWithTagToPatternAtom(symbolTable(id), tag)
     case IntegerMatcher(tag) => PatternInteger(tag)
     case FloatMatcher(tag) => PatternFloat(tag)
   }

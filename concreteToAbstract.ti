@@ -1,3 +1,3 @@
 "concrete.grammar"
-"concreteToAbstract.tr"
+trans("concreteToAbstract.tr")
 gOrig("2*[4+[3+[22*[11+[2*[3+4]]]]]]")

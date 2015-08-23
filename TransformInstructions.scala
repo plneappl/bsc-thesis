@@ -1,26 +1,29 @@
 import org.parboiled2._
 import shapeless._
 
-case class TransformInstructionsFile(grammar: String, transformer: String, commands: List[Command])
 
-class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[TransformInstructionsFile] {
+class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[TransformInstructions.TransformInstructionsFile] {
+  import TransformInstructions._
   def wspStr(s: String): Rule0 = rule {
     str(s) ~ t_optspace
   }
   
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
-  def commentEOL   = rule { optional(t_optspace) ~ optional("//" ~ zeroOrMore(!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
+  def commentEOL   = rule { optional(t_optspace) ~ optional(comment) ~ oneOrMore(t_newLine) ~ t_optspace }
+  def comment      = rule { "//" ~ zeroOrMore(!t_newLine ~ ANY) }
+  
   
   def InputFile = rule {
-    t_literal ~ commentNL ~
     t_literal ~ 
     zeroOrMore(commentNL ~ command) ~
-    optional(commentNL) ~> ((s1: String, s2: String, s3: Seq[Command]) => TransformInstructionsFile(s1, s2, s3.toList))
+    optional(commentNL) ~ optional(comment) ~ EOI ~> ((s1: String, s2: Seq[Command]) => TransformInstructionsFile(s1, s2.toList))
     
   }
   
   def command = rule {(
-      ("gOrig(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithOriginal)    
+      ("trans(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> transformGrammarCommand)
+    | ("exhst(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> exhaustivelyTransformGrammar)
+    | ("gOrig(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithOriginal)    
     | ("gTran(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithTransformed)   
     | ("writeGrammar(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> writeGrammar)
   )}  
@@ -32,7 +35,13 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
   }  
 }
 
-sealed trait Command
-case class parseWithOriginal(input: String) extends Command
-case class parseWithTransformed(input: String) extends Command
-case class writeGrammar(file: String) extends Command
+object TransformInstructions{
+  sealed trait Command
+  case class transformGrammarCommand(file: String) extends Command
+  case class exhaustivelyTransformGrammar(file: String) extends Command
+  case class parseWithOriginal(input: String) extends Command
+  case class parseWithTransformed(input: String) extends Command
+  case class writeGrammar(file: String) extends Command
+  
+  case class TransformInstructionsFile(grammar: String, commands: List[Command])
+}

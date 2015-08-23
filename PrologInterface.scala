@@ -30,8 +30,8 @@ class PrologInterface {
   
   def addDefinition(d: Definition) = (definitionsToWrite = d :: definitionsToWrite)
   
-  //TODO: Stream, min/max-depth (optional?); unparse for concrete/abstract
-  //TODO: AEs in files, files for use cases
+
+  //TODO: A <- { ... }, _X, exhaustive, _X+ _X*
   
   
   //transforms a tree of g1 to the equivalent of g2
@@ -41,21 +41,26 @@ class PrologInterface {
     g2: Grammar, 
     nonstop: Boolean = false, 
     maxDepth: Option[Int] = None,
-    startDepth: Int = 0): TransformationResult = {
-    println("\nInput tree:")
-    println("---------------")
-    println(t)
-    println("\nTransforming...")
+    backwards: Boolean = false,
+    startDepth: Int = 0): List[SyntaxTree] = {
+    //println("\nInput tree:")
+    //println("---------------")
+    //println(t)
+    //println("\nTransforming...")
     val X = new Variable("X")
     //println(treeToTerm(t))
     var limit = List(t.depth, startDepth).max
     if(!maxDepth.isEmpty)
       limit = List(limit, maxDepth.get).min
-    println(limit)
+    //println(limit)
     var ret = List[SyntaxTree]()
+    val relationArguments = if(backwards) Array[Term](X, treeToTerm(t))
+      else Array[Term](treeToTerm(t), X)
+    
+
     var continue = true
     do {
-      val q = new Query("iterative", Array[Term](new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), new pInteger(limit)))
+      val q = new Query("iterative", Array[Term](new Compound(tpRelName(g1.start, g2.start, flip = backwards), relationArguments), new pInteger(limit)))
       //println(q)
       val sols = q.allSolutions
       //sols foreach println
@@ -72,11 +77,74 @@ class PrologInterface {
       }
       if(!maxDepth.isEmpty && limit > maxDepth.get) continue = false
     } while(continue)
-    println("\nTransformed:")
-    println("---------------")
+    //println("\nTransformed:")
+    //println("---------------")
     //ret foreach println
-    println(ret.head)
+    //println(ret.head)
     ret
+  }
+  
+  def transformTreeStream2(
+    t: SyntaxTree, 
+    g1: Grammar, 
+    g2: Grammar, 
+    maxDepth: Option[Int] = None): Stream[SyntaxTree] = {
+    
+    val X = new Variable("X")
+    var limit = t.depth
+    var q = new Query("iterative", Array[Term](
+      new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
+      new pInteger(limit)
+    ))
+    q.open
+    println("q.hasMoreSolutions? " + q.hasMoreSolutions)
+    val s = scala.collection.JavaConversions.iterableAsScalaIterable(
+      q.asInstanceOf[java.lang.Iterable[java.util.Map[String, Term]]]
+    ).toStream
+    println(s.force)
+    s.map(sol => termToTree(sol.get("X"), sol).get)
+  }
+  
+  def transformTreeStream(
+    t: SyntaxTree, 
+    g1: Grammar, 
+    g2: Grammar, 
+    maxDepth: Option[Int] = None): Stream[SyntaxTree] = {
+    
+    val X = new Variable("X")
+    var limit = t.depth
+    var q = new Query("iterative", Array[Term](
+      new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
+      new pInteger(limit)
+    ))
+    q.open
+    println("initializing stream. Limit = " + limit + ". Query has solutions? " + q.hasMoreSolutions)
+    
+    def loop(): Stream[SyntaxTree] = {
+      if(!q.isOpen)
+        q.open
+      var sol = q.nextSolution()
+      while(sol == null && (maxDepth.isEmpty || limit < maxDepth.get)) { 
+        limit = limit + 2
+        println("increasing limit: limit := " + limit)
+        q.close
+        q = new Query("iterative", Array[Term](
+          new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
+          new pInteger(limit)
+        ))
+        q.open
+        sol = q.nextSolution()
+      } 
+      if(sol != null){
+        termToTree(sol.get("X"), sol).get #:: loop()
+      }
+      else{
+        println("no more solutions.")
+        Stream.empty
+      }
+    } 
+    
+    loop()
   }
   
   def treeToTerm(t: SyntaxTree): Term = {
@@ -116,7 +184,6 @@ object PrologInterface {
   import org.parboiled2._
   import Transform._
   
-  type TransformationResult = List[SyntaxTree]
 
   val iterativeDeepening = 
 """clause_tree(true,_,_) :- !.
@@ -162,8 +229,16 @@ iterative(G,D) :- clause_tree(G,0,D).
     override def toString = lhs + (if(rhs.length > 0) " :-\n\t" else "") + rhs.mkString(",\n\t") + "."
   }
   
+  
+  type TransformationResult = List[SyntaxTree]
+  type TransformerFunction = (SyntaxTree => TransformationResult)
+  
   //returns the transformed grammar and the forwards- and the backwardstransformation.
-  def transformGrammarWithFile(g: Grammar, filePath: String, keepFile: Boolean = false, maxDepth: Option[Int] = None): (Grammar, SyntaxTree => List[SyntaxTree], SyntaxTree => List[SyntaxTree]) = {
+  def transformGrammarWithFile(
+    g: Grammar, 
+    filePath: String, 
+    keepFile: Boolean = false, 
+    maxDepth: Option[Int] = None): (Grammar, TransformerFunction, TransformerFunction) = {
     val source = scala.io.Source.fromFile(filePath)
     val tr = source.mkString
     source.close
@@ -185,8 +260,8 @@ iterative(G,D) :- clause_tree(G,0,D).
         defs foreach pli.addDefinition
         pli.loadDefinitions(keepFile = keepFile)
         
-        val fwt = ((s: SyntaxTree) => pli.transformTree(s, g, gTrans, nonstop = true, maxDepth = maxDepth))
-        val bwt = ((s: SyntaxTree) => pli.transformTree(s, gTrans, g, nonstop = true, maxDepth = maxDepth))
+        val fwt = ((s: SyntaxTree) => pli.transformTree(s, g, gTrans, maxDepth = maxDepth))
+        val bwt = ((s: SyntaxTree) => pli.transformTree(s, gTrans, g, maxDepth = maxDepth, backwards = true))
         
         (gTrans, fwt, bwt)
       

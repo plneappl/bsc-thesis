@@ -23,19 +23,18 @@ object Main {
       val tif = parse[TransformInstructions, TransformInstructionsFile](args(0))(s => new TransformInstructions(s))
       val inputGrammar = parse[GrammarGrammar, GrammarCC](tif.grammar)(s => new GrammarGrammar(s))
       println(tif)
-      var gTrans: GrammarCC = null
-      var fwt: TransformerFunction = null
-      var bwt: TransformerFunction = null
+      var gTrans: GrammarCC = inputGrammar
+      var fwt: TransformerFunction = List(_)
+      var bwt: TransformerFunction = List(_)
       tif.commands.foreach {
         case parseWithOriginal(input) => parseTest(inputGrammar, input, fwt, bwt)
         case parseWithTransformed(input) => parseTest(gTrans, input, bwt, fwt)
         case writeGrammar(file) => writeFile(file, gTrans.toString)
         case transformGrammarCommand(file) => {
-          val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(inputGrammar, file, maxDepth = Some(80), keepFile = false)
+          val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = false)
           gTrans = gTrans2
-          fwt = fwt2
-          bwt = bwt2
-          println("transformed.")
+          fwt = fwt andThen ((_:TransformationResult).head) andThen fwt2
+          bwt = bwt andThen ((_:TransformationResult).head) andThen bwt2
         }
         case exhaustivelyTransformGrammar(file) => {
           val (gTrans2, fwt2, bwt2) = exhaustivelyTransform(inputGrammar, file)
@@ -115,17 +114,4 @@ object Main {
     println("Usage: Main <TransformInstructions.ti>")
   }
   
-  /*
-  def main(args: Array[String]): Unit = {
-    
-    
-    val (gTrans, fwt, bwt) = transformGrammarWithFile(g1, "concreteToAbstract.tr")
-    val stC = parseWithGrammar(g1)("2*[4+[3+[22*[11+[2*[3+4]]]]]]")
-    val stA = fwt(stC)
-    val stC2 = bwt(stA.head)
-    println(stC.unparse)
-    println(stA.head.unparse)
-    println(stC2.head.unparse)
-  }
-  */
 }

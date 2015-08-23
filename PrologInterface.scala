@@ -20,7 +20,7 @@ class PrologInterface {
   
   def loadDefinitions(keepFile: Boolean = false) = {
     
-    val file = writeTempFile(iterativeDeepening + "\n" + definitionsToWrite.mkString("\n"))
+    val file = writeTempFile(iterativeDeepening + "\n" + definitionsToWrite.sortBy(_.lhs.toString).mkString("\n"))
     
     loadPLFile(file.toString)
     
@@ -84,68 +84,6 @@ class PrologInterface {
     ret
   }
   
-  def transformTreeStream2(
-    t: SyntaxTree, 
-    g1: Grammar, 
-    g2: Grammar, 
-    maxDepth: Option[Int] = None): Stream[SyntaxTree] = {
-    
-    val X = new Variable("X")
-    var limit = t.depth
-    var q = new Query("iterative", Array[Term](
-      new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
-      new pInteger(limit)
-    ))
-    q.open
-    println("q.hasMoreSolutions? " + q.hasMoreSolutions)
-    val s = scala.collection.JavaConversions.iterableAsScalaIterable(
-      q.asInstanceOf[java.lang.Iterable[java.util.Map[String, Term]]]
-    ).toStream
-    println(s.force)
-    s.map(sol => termToTree(sol.get("X"), sol).get)
-  }
-  
-  def transformTreeStream(
-    t: SyntaxTree, 
-    g1: Grammar, 
-    g2: Grammar, 
-    maxDepth: Option[Int] = None): Stream[SyntaxTree] = {
-    
-    val X = new Variable("X")
-    var limit = t.depth
-    var q = new Query("iterative", Array[Term](
-      new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
-      new pInteger(limit)
-    ))
-    q.open
-    println("initializing stream. Limit = " + limit + ". Query has solutions? " + q.hasMoreSolutions)
-    
-    def loop(): Stream[SyntaxTree] = {
-      if(!q.isOpen)
-        q.open
-      var sol = q.nextSolution()
-      while(sol == null && (maxDepth.isEmpty || limit < maxDepth.get)) { 
-        limit = limit + 2
-        println("increasing limit: limit := " + limit)
-        q.close
-        q = new Query("iterative", Array[Term](
-          new Compound(tpRelName(g1.start, g2.start), Array[Term](treeToTerm(t), X)), 
-          new pInteger(limit)
-        ))
-        q.open
-        sol = q.nextSolution()
-      } 
-      if(sol != null){
-        termToTree(sol.get("X"), sol).get #:: loop()
-      }
-      else{
-        println("no more solutions.")
-        Stream.empty
-      }
-    } 
-    
-    loop()
-  }
   
   def treeToTerm(t: SyntaxTree): Term = {
     t match {

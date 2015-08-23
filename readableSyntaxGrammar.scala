@@ -44,18 +44,27 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   } 
     
   def numberRules(rmtsIn: Seq[GrammarRuleMatcher], rmtsOut: Seq[GrammarRuleMatcher]): (Seq[GrammarRuleMatcher], Seq[GrammarRuleMatcher]) = {
-    var used = (rmtsIn.map(_.getIds) ++ rmtsOut.map(_.getIds)).flatten.toSet
+    val used = (rmtsIn.map(_.getIds) ++ rmtsOut.map(_.getIds)).flatten.toSet
     println(rmtsIn)
     println(rmtsOut)
     println(used)
-    var next = 1
-    val rmtsIn2 = rmtsIn.map(numberRule(_, used))
-    val rmtsOut2 = rmtsOut.map(numberRule(_, used))
+    var used1 = used
+    val rmtsIn2 = rmtsIn.map(rule => {
+      val (r, u) = numberRule(rule, used1)
+      used1 = u
+      r
+    })
+    used1 = used
+    val rmtsOut2 = rmtsOut.map(rule => {
+      val (r, u) = numberRule(rule, used1)
+      used1 = u
+      r
+    })
     println(rmtsIn2 + "\n" + rmtsOut2)
     (rmtsIn2, rmtsOut2)
   }
     
-  def numberRule(r: GrammarRuleMatcher, used: Set[String]) = {
+  def numberRule(r: GrammarRuleMatcher, used: Set[String]): (GrammarRuleMatcher, Set[String])  = {
     var next = 1
     var used1 = used
     val newRhs = r.rhs.map(ma => {
@@ -66,7 +75,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
         ma.copy(next.toString)
       }
     })
-    GrammarRuleMatcher(r.lhs, newRhs, r.tag, r.restMatcher)
+    (GrammarRuleMatcher(r.lhs, newRhs, r.tag, r.restMatcher), used1)
   }
     
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }

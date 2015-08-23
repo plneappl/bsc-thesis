@@ -66,7 +66,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
         ma.copy(next.toString)
       }
     })
-    GrammarRuleMatcher(r.lhs, newRhs, r.tag)
+    GrammarRuleMatcher(r.lhs, newRhs, r.tag, r.restMatcher)
   }
     
   def commentNL    = rule { quiet(oneOrMore(commentEOL)) }
@@ -104,8 +104,9 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
       rhses.map(rhs1 => {
         val rn  = rhs1.rn
         val rhs = rhs1.rhsAtoms.toList
+        val restMatcher = rhs1.restMatcher
         if(rn.typ.sym.name == n){
-          GrammarRuleMatcher(NonterminalMatcher(n, "", false), rhs, rn.name)
+          GrammarRuleMatcher(NonterminalMatcher(n, "", false), rhs, rn.name, restMatcher)
         }
         else {
           throw new Exception("Rule name " + rn + " didn't match the Rule's type (" + n + ")!")
@@ -117,9 +118,12 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     oneOrMore(ruleMatcherRHS).separatedBy((commentNL | t_optspace) ~ wspStr("|"))
   }
   
-  case class RuleMatcherRHS(rn: RuleName, rhsAtoms: Seq[TransformerAtom])
+  case class RuleMatcherRHS(rn: RuleName, rhsAtoms: Seq[TransformerAtom], restMatcher: Option[RestMatcher])
   def ruleMatcherRHS = rule {
-    ruleName ~ t_space ~ oneOrMore(rhsAtom).separatedBy(t_space) ~> RuleMatcherRHS
+    ruleName ~ t_space ~ (
+      (oneOrMore(rhsAtom).separatedBy(t_space) ~ optional(t_space ~ "..." ~ (t_nt | t_term | push("")) ~> RestMatcher))
+    | (push(Seq[TransformerAtom]()) ~ "..." ~ (t_nt | t_term | push("")) ~> (n => Some(RestMatcher(n))))
+    ) ~> RuleMatcherRHS
   }
   
   def pattern = rule { 
@@ -157,7 +161,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     ) ~> ((w, t) => NameBinding(w, t))
   }
   def nameGen     = rule { 
-    ruleName ~ t_space ~ t_equal ~ t_space ~ 
+    (ruleName | (t_nt ~> (nt => RuleName(Nonterminal(nt), "")))) ~ t_space ~ t_equal ~ t_space ~ 
     t_alphaNum ~ t_space ~
     oneOrMore(t_visible).separatedBy(t_space) ~ t_optspace ~> 
     ((lhs, fun, args) => NameGen(lhs, fun, args.toList))
@@ -167,10 +171,11 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   
   def rhsAtom     = rule { 
       recursive | ((      
-          (t_nt               ~> (n => NonterminalMatcher(n, "", false)))
-        | (t_term             ~> ((s: String) => TerminalMatcher(s, "")))
-        | (t_literal          ~> ((s: String) => LiteralMatcher(s, "")))
-        | (str(t_int)         ~ push(IntegerMatcher("")))
+          (t_nt                           ~> (n => NonterminalMatcher(n, "", false)))
+        | (t_term                         ~> ((s: String) => TerminalMatcher(s, "")))
+        | (t_literal                      ~> ((s: String) => LiteralMatcher(s, "")))
+        | (str(t_int)                     ~ push(IntegerMatcher("")))
+        | ("_" ~ t_nt)                    ~> (n => AnyMatcher(n, ""))
     ) ~ identifier) }
   def nt          = rule { (t_nt ~> (n => NonterminalMatcher(n, "", false))) ~ identifier}
   def recursive   = rule { "r(" ~  nt ~ ")" ~> ((x: TransformerAtom) => x.copy(true))}

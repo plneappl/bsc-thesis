@@ -1,21 +1,25 @@
 start C
 begin
-  in
-    A -> A_1 B:1 t1:2 C:3 
-       | A_2 B
-  out 
-    A  -> A_1 B:1 A1  
-        | A_2 B
-    A1 -> A1_1 t1:2 C:3
-  pattern auto
-end
-begin
-  in
-    C -> C_1 t1:1 A:2 t2:3 
-       | C_2 <int>
-  out
-    C  -> C_1 t1:1 C1
-        | C_2 <int>
-    C1 -> C1_1 A:2 t2:3
-  pattern auto
+  A
+  begin
+    A1 = newName A1
+    in
+      A -> A_1 _B:1 ...D 
+    out 
+      A  -> A_1 _B:1 A1  
+      A1 -> A1_1 ...D
+    pattern auto
+  end
+  begin
+    in
+      A -> A_1 B
+    out
+      A -> A_1 B
+  end
+  begin
+    in
+      C -> C_1 _A
+    out
+      C -> C_1 _A
+  end
 end

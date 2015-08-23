@@ -4,7 +4,7 @@ object Grammar {
   
   
 	sealed trait GrammarAtom { def bare: String }
-	case class Nonterminal(sym: Symbol) extends GrammarAtom{
+	case class Nonterminal(sym: Symbol) extends GrammarAtom {
 		override def toString = sym.name
     def asString(indent: String): String = indent + toString
     def bare = toString
@@ -13,6 +13,11 @@ object Grammar {
     def apply(s: String): Nonterminal = new Nonterminal(Symbol(s))
   }
   
+  case class GrammarAtomSequence(seq: List[GrammarAtom]) extends GrammarAtom {
+    override def toString = seq.mkString(" ")
+    def bare = seq.map(_.bare).mkString(" ")
+  }
+
   sealed trait TerminalLike extends GrammarAtom
   
 	case class Terminal(sym: String) extends TerminalLike {
@@ -33,7 +38,7 @@ object Grammar {
   }
 	
 	case class GrammarRule(lhs: Nonterminal, rhs: List[GrammarAtom], tag: String){
-		def asString(indent: String, max: Int) = indent + padding(tag, max) + lhs + " -> " + ruleName +  rhs.map(_.toString).mkString(" ")
+		def asString(indent: String, max: Int) = indent + padding(tag, max) + lhs + " -> " + ruleName + " " + rhs.map(_.toString).mkString(" ")
 		override def toString = asString("", 0)
 		var matched = false
     def ruleName = RuleName(lhs, tag)
@@ -147,32 +152,33 @@ object Grammar {
     parseRegex(r) ^^ { x => LeafString(x) }
   
   def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
-    listToOption((grammar lookup nonterminal).map(r => parseRHS(r, grammar) ^^ {
+    listToOption((grammar lookup nonterminal).map(r => parseRHS(r.rhs, grammar) ^^ {
       children => Branch(r.ruleName, children)
     }))
   }
   
-  def parseRHS(rule: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = rule.rhs match {
+  def parseRHS(rule: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = rule match {
     case head :: tail => {
       //println("rule: " + rule.tag + ": " + rule.asString("", 1))
-      recurseParseRHS(head, GrammarRule(rule.lhs, tail, rule.tag), grammar)
+      recurseParseRHS(head, tail, grammar)
     }
     case Nil => {s => Some((Nil, s))}
   }
   
-  def recurseParseRHS(head: GrammarAtom, tail: GrammarRule, grammar: Grammar): Parser[List[SyntaxTree]] = { 
+  def recurseParseRHS(head: GrammarAtom, tail: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = { 
     parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
       case (t1, t2) => t1 :: t2
     }
   }
   
   def parseGrammarAtom(head: GrammarAtom, grammar: Grammar): Parser[SyntaxTree] = head match {
-        case nt: Nonterminal => parseNonterminal(nt, grammar)
-        case Terminal(str) => keywordParser(str)
-        case Regex(str) => regexParser(str)
-        case IntegerTerminal => digitsParser
-        case FloatTerminal => floatParser
-      }
+    case nt: Nonterminal => parseNonterminal(nt, grammar)
+    case Terminal(str) => keywordParser(str)
+    case Regex(str) => regexParser(str)
+    case IntegerTerminal => digitsParser
+    case FloatTerminal => floatParser
+    case GrammarAtomSequence(l) => parseRHS(l, grammar) ^^ { l1 => Branch(RuleName(Nonterminal(""), ""), l1) }
+  }
       
   def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
     var parser = parseNonterminal(g.start, g)

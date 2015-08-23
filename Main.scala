@@ -1,12 +1,13 @@
 object Main {
   import PrologInterface._
   import scala.util.{Failure, Success}
-  import Grammar.{parseWithGrammar, SyntaxTree}
+  import Grammar.{parseWithGrammar, SyntaxTree, Grammar => GrammarCC}
   import org.parboiled2._
   import FileIO._
+  import TransformInstructions._
   
   
-  type TransformerFunction = (SyntaxTree => TransformationResult)
+  
   
   def main(args: Array[String]): Unit = {
     if(args.length == 0){
@@ -19,23 +20,68 @@ object Main {
       //end HACK
       
       
-      val ti = parse[TransformInstructions, TransformInstructionsFile](args(0))(s => new TransformInstructions(s))
-      val inputGrammar = parse[GrammarGrammar, Grammar.Grammar](ti.grammar)(s => new GrammarGrammar(s))
-      val (gTrans, fwt, bwt) = transformGrammarWithFile(inputGrammar, ti.transformer, maxDepth = Some(80), keepFile = false)
-      ti.commands.foreach{
+      val tif = parse[TransformInstructions, TransformInstructionsFile](args(0))(s => new TransformInstructions(s))
+      val inputGrammar = parse[GrammarGrammar, GrammarCC](tif.grammar)(s => new GrammarGrammar(s))
+      println(tif)
+      var gTrans: GrammarCC = null
+      var fwt: TransformerFunction = null
+      var bwt: TransformerFunction = null
+      tif.commands.foreach {
         case parseWithOriginal(input) => parseTest(inputGrammar, input, fwt, bwt)
         case parseWithTransformed(input) => parseTest(gTrans, input, bwt, fwt)
         case writeGrammar(file) => writeFile(file, gTrans.toString)
+        case transformGrammarCommand(file) => {
+          val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(inputGrammar, file, maxDepth = Some(80), keepFile = false)
+          gTrans = gTrans2
+          fwt = fwt2
+          bwt = bwt2
+          println("transformed.")
+        }
+        case exhaustivelyTransformGrammar(file) => {
+          val (gTrans2, fwt2, bwt2) = exhaustivelyTransform(inputGrammar, file)
+          gTrans = gTrans2
+          fwt = fwt2
+          bwt = bwt2
+        }
+        case x => println(x)
       }
     }
   }
   
-  def parseTest(g: Grammar.Grammar, i: String, fwt: TransformerFunction, bwt: TransformerFunction) = {
+  def exhaustivelyTransform(g: GrammarCC, file: String): (GrammarCC, TransformerFunction, TransformerFunction) = {
+    var (gTrans, fwt, bwt) = transformGrammarWithFile(g, file, maxDepth = Some(80), keepFile = false)
+    var cont = true
+    do {
+      println("intermediate grammar: ")
+      println(gTrans)
+      println
+      val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = false)
+      
+      if(gTrans2.rules.length < gTrans.rules.length) cont = false
+      else{
+        gTrans = gTrans2
+        fwt = fwt andThen ((_:TransformationResult).head) andThen fwt2
+        bwt = bwt andThen ((_:TransformationResult).head) andThen bwt2
+      }
+    } while(cont)
+    (gTrans, fwt, bwt)
+  }
+  
+  def parseTest(g: GrammarCC, i: String, fwt: TransformerFunction, bwt: TransformerFunction) = {
     val stOrig = parseWithGrammar(g)(i)
-    val stTransformed = fwt(stOrig)
-    val stBackwards = bwt(stTransformed.head)
     println
-    println("Input parsed, then unparsed: ")
+    println("Input parsed: ")
+    println(stOrig)
+    println
+    val stTransformed = fwt(stOrig)
+    println("Transformed: ")
+    println(stTransformed.head)
+    println
+    val stBackwards = bwt(stTransformed.head)
+    println("Back again: ")
+    println(stBackwards.head)
+    println
+    println("Unparsed:")
     println(stOrig.unparse)
     println
     println("Transformed: ")

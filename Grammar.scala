@@ -90,81 +90,110 @@ object Grammar {
     def asString(indent: String) = indent + "FloatLeaf: " + f
     def unparse = f.toString
   }
-	
-	
-	type Parser[A] = String => Option[(A, String)]
-  def choice[A](firstTry: => Parser[A], secondTry: => Parser[A]): Parser[A] = input => {
-    firstTry(input) orElse secondTry(input)
-  }
-    
-  def sequence[A, B](parseFirstPart: => Parser[A], parseSecondPart: => Parser[B]): Parser[(A, B)] =
-    input => parseFirstPart(input) match {
-      case Some((firstResult, afterFirstPart)) => parseSecondPart(afterFirstPart) match {
-          case Some((secondResult, afterSecondPart)) => Some( ((firstResult, secondResult), afterSecondPart) )
-          case None => None
-        }
-      case None => None
-    }
-    
-  def postprocess[A, B](parser: => Parser[A])(postprocessor: A => B): Parser[B] =
-    input => parser(input) match {
-      case Some( (result, rest) ) => Some( (postprocessor(result), rest) )
-      case None => None
-    }
-  implicit class ParserOps[A](self: => Parser[A]) {
-    def | (that: => Parser[A]): Parser[A] = choice(self, that)
-    def ~ [B] (that: => Parser[B]): Parser[(A, B)] = sequence(self, that)
-    def ^^ [B] (postprocessor: A => B): Parser[B] = postprocess(self)(postprocessor)
-  }
-  
-  def listToOption[A](l: List[Parser[A]]): Parser[A] = l.reduceRight((x, y) => x | y)
-    
-  def parseString(expected: String): Parser[String] = code => {
-    //println("T: trying to match: " + expected)
-    //println("T: with:\n" + code.split("\n")(0))
-    if (code startsWith expected) Some((expected, code drop expected.length))
-    else None
-  }
-  def parseRegex(regex: String): Parser[String] = code => {
-    //println("R: trying to match: '" + regex + "'")
-    //println("R: with:            '" + code + "'")
-    val Pattern = s"(?s)($regex)(.*)".r       
-    code match {
-      case Pattern(groups @ _*) => {
-        //println("R: matched:       '" + groups.head + "'")
-        Some((groups.head, groups.last))
-      }
-      case otherwise => {
+
+
+  trait Parser[A] {
+    def allResults(code: String): Iterator[(A, String)]
+
+    def apply(code: String): Option[(A, String)] = {
+      val results = allResults(code)
+      if (results.nonEmpty)
+        Some(results.next())
+      else
         None
+    }
+
+    def | (that: => Parser[A]): Parser[A] = new ChoiceParser(this, that)
+    def ~ [B] (that: => Parser[B]): Parser[(A, B)] = new SequenceParser(this, that)
+    def ^^ [B] (postprocessor: A => B): Parser[B] = new Postprocessor(this, postprocessor)
+
+  }
+
+  class ChoiceParser[A](
+    firstTry: => Parser[A],
+    secondTry: => Parser[A]
+  ) extends Parser[A] {
+    def allResults(code: String): Iterator[(A, String)] =
+      firstTry.allResults(code) ++ secondTry.allResults(code)
+  }
+
+  object ChoiceParser {
+    def apply[A](parsers: List[Parser[A]]): Parser[A] =
+      parsers.reduceRight((x, y) => x | y)
+  }
+
+  class SequenceParser[A, B](
+    firstPart: => Parser[A],
+    secondPart: => Parser[B]
+  ) extends Parser[(A, B)] {
+    def allResults(code: String): Iterator[((A, B), String)] =
+      for {
+        (lhs, rhsCode)  <- firstPart.allResults(code)
+        (rhs, leftover) <- secondPart.allResults(rhsCode)
+      }
+      yield ((lhs, rhs), leftover)
+  }
+
+  class Postprocessor[A, B](parser: => Parser[A], postprocessor: A => B) extends Parser[B] {
+    def allResults(code: String): Iterator[(B, String)] =
+      parser.allResults(code).map {
+        case (result, leftover) => (postprocessor(result), leftover)
+      }
+  }
+
+  case class StringParser(expected: String) extends Parser[String] {
+    def allResults(code: String): Iterator[(String, String)] =
+      if (code startsWith expected)
+        Iterator((expected, code drop expected.length))
+      else
+        Iterator.empty
+  }
+
+  case class RegexParser(regex: String) extends Parser[String] {
+    def allResults(code: String): Iterator[(String, String)] = {
+      val Pattern = s"(?s)($regex)(.*)".r
+      code match {
+        case Pattern(groups @ _*) => {
+          Iterator((groups.head, groups.last))
+        }
+        case otherwise => {
+          Iterator.empty
+        }
       }
     }
   }
+
+  case class NothingParser[A](result: A) extends Parser[A] {
+    def allResults(code: String): Iterator[(A, String)] =
+      Iterator((result, code))
+  }
+
   def keywordParser(keyword: String): Parser[SyntaxTree] = 
-    parseString(keyword) ^^ { x => LeafString(x) }
+    StringParser(keyword) ^^ { x => LeafString(x) }
   
   def digitsParser: Parser[SyntaxTree] = 
-    parseRegex("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
+    RegexParser("[0-9]+") ^^ { x => LeafInteger(x.toInt) }
 
   def floatParser: Parser[SyntaxTree] = 
-    parseRegex("[0-9]+\\.[0-9]+") ^^ {x => LeafFloat(x.toDouble) }
+    RegexParser("[0-9]+\\.[0-9]+") ^^ {x => LeafFloat(x.toDouble) }
     
   def regexParser(r: String): Parser[SyntaxTree] = 
-    parseRegex(r) ^^ { x => LeafString(x) }
-  
+    RegexParser(r) ^^ { x => LeafString(x) }
+
   def parseNonterminal(nonterminal: Nonterminal, grammar: Grammar): Parser[SyntaxTree] = {
-    listToOption((grammar lookup nonterminal).map(r => parseRHS(r.rhs, grammar) ^^ {
-      children => Branch(r.ruleName, children)
+    ChoiceParser((grammar lookup nonterminal).map(r => parseRHS(r.rhs, grammar) ^^ {
+      children => Branch(r.ruleName, children): SyntaxTree
     }))
   }
-  
+
   def parseRHS(rule: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = rule match {
     case head :: tail => {
       //println("rule: " + rule.tag + ": " + rule.asString("", 1))
       recurseParseRHS(head, tail, grammar)
     }
-    case Nil => {s => Some((Nil, s))}
+    case Nil => NothingParser(Nil)
   }
-  
+
   def recurseParseRHS(head: GrammarAtom, tail: List[GrammarAtom], grammar: Grammar): Parser[List[SyntaxTree]] = { 
     parseGrammarAtom(head, grammar) ~ parseRHS(tail, grammar) ^^ {
       case (t1, t2) => t1 :: t2
@@ -181,17 +210,17 @@ object Grammar {
   }
       
   def parseWithGrammar(g: Grammar)(str: String): SyntaxTree = {
-    var parser = parseNonterminal(g.start, g)
-    parser(str) match {
-      case Some((t, rest)) => {
-        if (rest == "") t
-        else {
-          println("Not matched!!\n--------\n" + rest + "\n--------\n")
-          t
-        }
+    val results = parseNonterminal(g.start, g).allResults(str)
+    if (results.nonEmpty) {
+      val (t, rest) = results.minBy(_._2.length)
+      if (rest == "") t
+      else {
+        println("Not matched!!\n--------\n" + rest + "\n--------\n")
+        t
       }
-      case None => sys.error("Not an Expression: " + str)
-      //case None => Branch(Symbol(""), List())
     }
+    else
+      sys.error("Not an Expression: " + str)
   }
+
 }

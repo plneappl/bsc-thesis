@@ -1,25 +1,27 @@
-start C
+start A
 begin
-  A
   begin
     A1 = newName A1
+    
     in
-      A -> A_1 _B:1 ...D 
+      A -> A_1 _B:1 _C:1 ...D 
     out 
       A  -> A_1 _B:1 A1  
-      A1 -> A1_1 ...D
+      A1 -> A1_1 _C:1 ...D
     pattern auto
   end
   begin
     in
-      A -> A_1 B
-    out
-      A -> A_1 B
+      C -> C_1 _A _B
+    seq
+      C -> C_1 _A _B
+    pattern auto
   end
   begin
     in
       C -> C_1 _A
-    out
+    seq
       C -> C_1 _A
+    pattern auto
   end
 end

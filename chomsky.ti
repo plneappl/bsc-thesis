@@ -1,3 +1,4 @@
-"concrete.grammar"
-trans("chomsky.tr")
-gOrig("1+[2*[3*[4+[5+[6]]]]]")
+"inlining.grammar"
+exhst("chomsky.tr")
+//gOrig("1+[2*[3*[4+[5+[6]]]]]")
+gOrig("if 1 then 2 else if 0 then 3")

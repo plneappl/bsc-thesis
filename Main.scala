@@ -56,11 +56,11 @@ object Main {
       println
       val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = false)
       
-      if(gTrans2.rules.length < gTrans.rules.length) cont = false
-      else{
+      if(gTrans.equalRules(gTrans2.rules)) cont = false
+      else {
         gTrans = gTrans2
-        fwt = fwt andThen ((_:TransformationResult).head) andThen fwt2
-        bwt = bwt andThen ((_:TransformationResult).head) andThen bwt2
+        fwt = fwt andThen ((_:TransformationResult).head) andThen (x => {println(x); x}) andThen fwt2
+        bwt = bwt2 andThen ((_:TransformationResult).head) andThen (x => {println(x); x}) andThen bwt
       }
     } while(cont)
     (gTrans, fwt, bwt)

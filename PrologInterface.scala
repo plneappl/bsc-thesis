@@ -18,19 +18,24 @@ class PrologInterface {
   
   def initializeDefinitions = (definitionsToWrite = List())
   
-  def loadDefinitions(keepFile: Boolean = false) = {
+  var file: java.io.File = null
+  def loadDefinitions = {
     
-    val file = writeTempFile(iterativeDeepening + "\n" + definitionsToWrite.sortBy(_.lhs.toString).mkString("\n"))
+    file = writeTempFile(iterativeDeepening + "\n" + definitionsToWrite.sortBy(_.lhs.toString).mkString("\n"))
     
     loadPLFile(file.toString)
     
-    if(!keepFile)
-      file.delete
+    
   }
   
   def addDefinition(d: Definition) = (definitionsToWrite = d :: definitionsToWrite)
   
 
+  def unload(keepFile: Boolean = false) = {
+    (new Query("unload_file", Array[Term](new Atom(file.toString)))).oneSolution
+    if(!keepFile)
+      file.delete
+  }
   //TODO: A <- { ... }, _X, exhaustive, _X+ _X*
   
   
@@ -61,7 +66,7 @@ class PrologInterface {
     var continue = true
     do {
       val q = new Query("iterative", Array[Term](new Compound(tpRelName(g1.start, g2.start, flip = backwards), relationArguments), new pInteger(limit)))
-      //println(q)
+      println(q)
       val sols = q.allSolutions
       //sols foreach println
       ret = sols.map(sol => termToTree(sol.get("X"), sol)).flatten.toList
@@ -196,10 +201,20 @@ iterative(G,D) :- clause_tree(G,0,D).
         val pli = new PrologInterface
         
         defs foreach pli.addDefinition
-        pli.loadDefinitions(keepFile = keepFile)
         
-        val fwt = ((s: SyntaxTree) => pli.transformTree(s, g, gTrans, maxDepth = maxDepth))
-        val bwt = ((s: SyntaxTree) => pli.transformTree(s, gTrans, g, maxDepth = maxDepth, backwards = true))
+        val fwt = ((s: SyntaxTree) => {
+          pli.loadDefinitions
+          val t = pli.transformTree(s, g, gTrans, maxDepth = maxDepth)
+          pli.unload(keepFile = keepFile)
+          t
+        })
+
+        val bwt = ((s: SyntaxTree) => {
+          pli.loadDefinitions
+          val t = pli.transformTree(s, gTrans, g, maxDepth = maxDepth, backwards = true)
+          pli.unload(keepFile = keepFile)
+          t
+        })
         
         (gTrans, fwt, bwt)
       

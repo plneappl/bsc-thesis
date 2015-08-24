@@ -58,6 +58,7 @@ object Grammar {
         rule.rhs.mkString(" ")}).mkString 
     }).mkString("\n\n") + 
     "\n"
+    def equalRules(r: GrammarRules) = r.toSet == rules.toSet
 	}
 	
 	def joinStringsBy(join: String)(a: Any, b: Any) = a + join + b

@@ -1,0 +1,20 @@
+start A1
+begin
+	A1 = A1
+	A2 = A2
+	A2 = newRuleName A2
+	A2 = newRuleName A2
+	in
+		A -> A_1 A _D
+		A -> A_2 _B
+	out
+		A1 -> A1_3 _B A2
+		A2 -> A2_2 _D A2 | A2_1 ""
+		//TODO: ... => pattern 
+	pattern
+	  A_2 b            = A1_3 b (A2_1 "") 
+	  A_1 (A_2 b) d    = A1_3 b (A2_2 d (A2_1 ""))
+	  A_1 (A1_3 b a) d = A1_3 b (A_1 a d)
+	  //A to A2 ? 
+end
+

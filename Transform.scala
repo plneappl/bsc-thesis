@@ -82,7 +82,7 @@ object Transform {
     checkDeclaredVars(file)
     val (grules, patterns, defs) = file.tbs.map(applyTransformerBlock(to)).map(_._2).flatten.unzip3
     val grules2 = grules.flatten
-    (Grammar(file.s.s, grules2.toSet.toList.sortBy(((r: GrammarRule) => r.tag))), patterns.flatten, defs.flatten)
+    (Grammar(file.s.s, grules2.toSet.toList.sortBy(((r: GrammarRule) => r.tag)).sortBy((r: GrammarRule) => r.rhs.length).reverse), patterns.flatten, defs.flatten)
     
   }
   def applyTransformerBlock(to: Grammar, prev: TransformerState = (Set(), Map(), Map()))(block: TransformerBlock): (UsedSymbols, List[(GrammarRules, PatternSynonyms, List[Definition])]) = {
@@ -129,7 +129,9 @@ object Transform {
       case Some((us2, listOfResultPairs)) => {
         us ++= us2
         for((matchedRules, symTable, ruleNameTable, producedRules) <- listOfResultPairs){ 
+          
           outRules = producedRules ++ outRules
+
           us ++= getSymbols(symTable)
           if(tap.auto) {
             var pss = producePatternSynonyms(tap.transformer, matchedRules, producedRules, symTable)
@@ -509,9 +511,24 @@ object Transform {
     state
   }
   
+  var GLOBALCOUNTER = 0
+  def newRuleName(state: TransformerState, lhs: RuleName, a1: String): TransformerState = {
+    var rnTarget = RuleName(Nonterminal(a1), GLOBALCOUNTER.toString)
+    GLOBALCOUNTER += 1
+    val rntValues = state._3.values.toList
+    while(rntValues.contains(rnTarget)){
+      rnTarget = RuleName(Nonterminal(a1), GLOBALCOUNTER.toString)
+      GLOBALCOUNTER += 1
+    }
+    val rnEntry = ((lhs, rnTarget))
+    state.copy(_3 = state._3 + rnEntry)
+    //(state._1, state._2, state._3 + rnEntry)
+  }
   
   def newName(state: TransformerState, lhs: RuleName, a1: String): TransformerState = {
-    var ntTarget = Nonterminal(a1)
+    var ntTarget = Nonterminal(a1 + GLOBALCOUNTER)
+    GLOBALCOUNTER += 1
+    println("!!!!!")
     val stValues = state._2.values.toList
     while(stValues.contains(ntTarget) || state._1.contains(ntTarget)){
       ntTarget = Nonterminal(nextLexicographic(ntTarget.toString))
@@ -578,7 +595,6 @@ object Transform {
   
   //produce a GrammarAtom from a TransformerAtom by looking up in the SymbolTable and adding new IDs
   def applyMatcher(st: SymbolTable, a: TransformerAtom, usedSymbols: UsedSymbols): (SymbolTable, UsedSymbols, GrammarAtom) = {
-     println(st)
      a match {
       case id: NonterminalMatcher => {
         val (st2, us2) = extendSymbolTable(st, id, usedSymbols)

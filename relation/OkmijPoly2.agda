@@ -44,8 +44,6 @@ open Char     using (Char)
 open String   using (String)
 open Vec      using (Vec ; [] ; _∷_)
 
-postulate error : ∀ {A : Set} → A
-
 data Type : Set → Set₁ where
   flo : Type Float
   rat : Type ℚ

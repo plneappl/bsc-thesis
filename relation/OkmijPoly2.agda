@@ -22,7 +22,7 @@ open import Data.List hiding (sum)
 open RawMonad (monad {Level.zero}) using (_>>=_)
 open import Data.Unit hiding (_≟_)
 open import Data.Empty
-open import Data.Product hiding (∃ ; map)
+open import Data.Product hiding (∃! ; map)
 open import Relation.Binary.PropositionalEquality
 open import Relation.Nullary.Core
 
@@ -79,18 +79,18 @@ Nil : (T : Set) {{_ : Type T}} → List T
 Nil ._ {{nat}} = 0 ∷ []
 Nil  + {{ _ }} = []
 
-infixr 1 ∃_
+infixr 1 ∃!_
 
-∃_ : ∀ {T : Set} → List T → Set
-∃ _ ∷ [] = ⊤
-∃ _      = ⊥
+∃!_ : ∀ {T : Set} → List T → Set
+∃! _ ∷ [] = ⊤
+∃! _      = ⊥
 
-witness : ∀ {T : Set} (x : List T) {{witness : ∃ x}} → T
+witness : ∀ {T : Set} (x : List T) {{witness : ∃! x}} → T
 witness (x ∷ []) {{tt}} = x
 witness [] {{()}}
 witness (_ ∷ _ ∷ _) {{()}}
 
-nil : (T : Set) {{_ : Type T}} {{witness : ∃ Nil T}} → T
+nil : (T : Set) {{_ : Type T}} {{witness : ∃! Nil T}} → T
 nil T = witness (Nil T)
 
 nil-is-good : nil ℕ ≡ 0
@@ -102,7 +102,7 @@ Add ._ ._ ._ {{nat}} {{nat}} {{nat}} = Nat._+_ ∷ []
 Add  _  _  _ {{ _ }} {{ _ }} {{ _ }} = []
 
 _+_ : {A B C : Set} {{_ : Type A}} {{_ : Type B}} {{_ : Type C}} →
-      {{witness : ∃ Add A B C}} → A → B → C
+      {{witness : ∃! Add A B C}} → A → B → C
 _+_ = witness (Add _ _ _)
 
 add-is-good : 2 + 2 ≡ 4
@@ -113,7 +113,7 @@ Sum T {{_}} with Nil T | Add T T T
 ... | nil' ∷ [] | add' ∷ [] = Vec.foldr (const T) add' nil' ∷ []
 ... | ========= | -=======- = []
 
-sum : {T : Set} {{_ : Type T}} {{witness : ∃ Sum T}} → ∀ {n} → Vec T n → T
+sum : {T : Set} {{_ : Type T}} {{witness : ∃! Sum T}} → ∀ {n} → Vec T n → T
 sum = witness (Sum _)
 
 sum-is-good : let open Vec hiding (sum) ; open List using () in
@@ -203,7 +203,7 @@ Mul6 _ _ _ = []
 
 
 _*_ : {A B C : Set} {{_ : Type A}} {{_ : Type B}} {{_ : Type C}} →
-      {{witness : ∃ Mul A B C}} → A → B → C
+      {{witness : ∃! Mul A B C}} → A → B → C
 _*_ = witness (Mul _ _ _)
 
 nat*nat : 3 * 5 ≡ 15

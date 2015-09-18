@@ -86,7 +86,7 @@ class PrologInterface {
     //println("---------------")
     //ret foreach println
     //println(ret.head)
-    ret
+    ret.sortBy(t => (t.depth, t.unparse.length, t.unparse))
   }
   
   

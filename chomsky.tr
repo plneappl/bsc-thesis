@@ -1,27 +1,26 @@
-start A
+start S
 begin
   begin
     A1 = newName A1
-    
     in
       A -> A_1 _B:1 _C:1 ...D 
     out 
       A  -> A_1 _B:1 A1  
       A1 -> A1_1 _C:1 ...D
-    pattern auto
+    pattern auto force
   end
   begin
     in
       C -> C_1 _A _B
     seq
       C -> C_1 _A _B
-    pattern auto
+    pattern auto force
   end
   begin
     in
       C -> C_1 _A
     seq
       C -> C_1 _A
-    pattern auto
+    pattern auto force
   end
 end

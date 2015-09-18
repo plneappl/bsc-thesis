@@ -35,10 +35,10 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   }
   def matcherAndTransformer: Rule1[TransformerAndPatterns] = rule {
     inOut ~ patterns ~> (
-      (rmtsIn: Seq[GrammarRuleMatcher], rmtsOut: Seq[GrammarRuleMatcher], nr: Boolean, patnsAuto: (Boolean, Seq[PatternSynonym])) => {
+      (rmtsIn: Seq[GrammarRuleMatcher], rmtsOut: Seq[GrammarRuleMatcher], nr: Boolean, patnsAutoForce: (Boolean, Boolean, Seq[PatternSynonym])) => {
         val (rmtsIn2, rmtsOut2) = if(nr) numberRules(rmtsIn, rmtsOut) else (rmtsIn, rmtsOut)
-        val (auto, patns) = patnsAuto
-        TransformerAndPatterns(TransformerRule(rmtsIn2.toList, rmtsOut2.toList), patns.toList, auto)
+        val (auto, force, patns) = patnsAutoForce
+        TransformerAndPatterns(TransformerRule(rmtsIn2.toList, rmtsOut2.toList), patns.toList, auto, force)
       }
     )
   } 
@@ -82,14 +82,14 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def commentEOL   = rule { optional(t_optspace) ~ optional("//" ~ zeroOrMore(!t_newLine ~ ANY)) ~ oneOrMore(t_newLine) ~ t_optspace }
       
   def ruleMatchers = rule { oneOrMore(ruleMatcher).separatedBy(commentNL) ~ commentNL ~> (l => l.flatten) }
-  def patternKeyword: Rule1[Boolean] = rule{(( t_pattern ~ t_space ~ t_autoPattern ~ push(true) ) | ( t_pattern ~ push(false) )) ~ commentNL }
-  def patternBlock: Rule1[(Boolean, Seq[PatternSynonym])] = rule { 
-    patternKeyword ~ zeroOrMore(pattern) ~> ((x: Boolean, y: Seq[PatternSynonym]) => (x, y)) 
+  def patternKeyword: RuleN[Boolean :: Boolean :: HNil] = rule{t_pattern ~ ((t_space ~ t_autoPattern ~ push(true))  | (push(false) )) ~ ((t_space ~ t_forcePattern ~ push(true))  | (push(false) )) ~ commentNL }
+  def patternBlock: Rule1[(Boolean, Boolean, Seq[PatternSynonym])] = rule { 
+    patternKeyword ~ zeroOrMore(pattern) ~> ((x1: Boolean, x2: Boolean, y: Seq[PatternSynonym]) => (x1, x2, y)) 
   }
-  def patterns: Rule1[(Boolean, Seq[PatternSynonym])]    = rule { optional( patternBlock ) ~> 
-    ((x: Option[(Boolean, Seq[PatternSynonym])]) => {
+  def patterns: Rule1[(Boolean, Boolean, Seq[PatternSynonym])]    = rule { optional( patternBlock ) ~> 
+    ((x: Option[(Boolean, Boolean, Seq[PatternSynonym])]) => {
       x match {
-        case Some(l) => l; case None => (false, Seq())
+        case Some(l) => l; case None => (false, false, Seq())
       } 
     })
   }
@@ -219,12 +219,13 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
   def t_recursive        = """r"""                            
   def t_equal            = """="""                            
   def t_pattern          = """pattern"""   
-  def t_autoPattern      = """auto"""                   
+  def t_autoPattern      = """auto"""  
+  def t_forcePattern     = """force"""                 
   def t_underscore       = """_"""                            
   def t_space            = rule {  oneOrMore(CharPredicate(" \t")) }
   def t_optspace         = rule { zeroOrMore(CharPredicate(" \t")) }
   
-  def reservedLower      = rule { t_in | t_out | t_seq | t_begin | t_end | t_pattern | t_autoPattern }
+  def reservedLower      = rule { t_in | t_out | t_seq | t_begin | t_end | t_pattern | t_autoPattern | t_forcePattern }
 
 }
 
@@ -247,11 +248,11 @@ object ReadableSyntaxGrammar{
     override def toString = asString("")
   }  
   
-  case class TransformerAndPatterns(transformer: TransformerRule, patterns: PatternSynonyms, auto: Boolean) {
+  case class TransformerAndPatterns(transformer: TransformerRule, patterns: PatternSynonyms, auto: Boolean, force: Boolean) {
     def asString(indent: String) = {
       val indent2 = indent + "  "
       transformer.asString(indent2) + "\n" +
-      indent + "pattern" + (if(auto) " auto" else "") + "\n" + 
+      indent + "pattern" + (if(auto) " auto" else "") + (if(force) " force" else "") + "\n" + 
       indent2 + patterns.mkString("\n" + indent2)
     }
     

@@ -69,15 +69,22 @@ object Grammar {
     override def toString = asString("")
     def depth: Int
     def unparse: String
+    def latexTree(indent: String): String
+    def latexTree: String = "\\Tree " + latexTree("")
   }
 	case class Branch(rn: RuleName, childs: List[SyntaxTree]) extends SyntaxTree {
     def asString(indent: String) = indent + "Branch: " + rn + "\n" + 
       childs.map(_.asString(indent + "  ")).mkString("\n")
     def depth = childs.map(_.depth).max + 1
     def unparse = childs.map(_.unparse).mkString("")
+    def latexTree(indent: String) = {
+      val indent2 = indent + "  "
+      indent + "[ ." + rn + "\n" + childs.map(_.latexTree(indent2)).mkString("\n") + " ]"
+    }
   }
 	sealed trait Leaf extends SyntaxTree{
     def depth = 1
+    def latexTree(indent: String) = indent + unparse
   }
 	case class LeafString(str: String) extends Leaf {
     def asString(indent: String) = indent + "StrLeaf: " + str

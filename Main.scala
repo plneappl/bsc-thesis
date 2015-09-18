@@ -48,13 +48,14 @@ object Main {
   }
   
   def exhaustivelyTransform(g: GrammarCC, file: String): (GrammarCC, TransformerFunction, TransformerFunction) = {
-    var (gTrans, fwt, bwt) = transformGrammarWithFile(g, file, maxDepth = Some(80), keepFile = false)
+    val kf = false
+    var (gTrans, fwt, bwt) = transformGrammarWithFile(g, file, maxDepth = Some(80), keepFile = kf)
     var cont = true
     do {
       println("intermediate grammar: ")
       println(gTrans)
       println
-      val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = false)
+      val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = kf)
       
       if(gTrans.equalRules(gTrans2.rules)) cont = false
       else {
@@ -71,14 +72,17 @@ object Main {
     println
     println("Input parsed: ")
     println(stOrig)
+    println(stOrig.latexTree)
     println
     val stTransformed = fwt(stOrig)
     println("Transformed: ")
     println(stTransformed.head)
+    println(stTransformed.head.latexTree)
     println
     val stBackwards = bwt(stTransformed.head)
     println("Back again: ")
     println(stBackwards.head)
+    println(stBackwards.head.latexTree)
     println
     println("Unparsed:")
     println(stOrig.unparse)
@@ -88,6 +92,7 @@ object Main {
     println
     println("Back again: ")
     println(stBackwards.head.unparse)
+    //stBackwards.map(_.unparse).foreach(println)
     println
   }
   

@@ -36,28 +36,31 @@ object Main {
           fwt = fwt andThen ((_:TransformationResult).head) andThen fwt2
           bwt = bwt andThen ((_:TransformationResult).head) andThen bwt2
         }
-        case exhaustivelyTransformGrammar(file) => {
-          val (gTrans2, fwt2, bwt2) = exhaustivelyTransform(inputGrammar, file)
+        case exhaustivelyTransformGrammar(file, limit) => {
+          val (gTrans2, fwt2, bwt2) = exhaustivelyTransform(inputGrammar, file, limit)
           gTrans = gTrans2
           fwt = fwt2
           bwt = bwt2
+          println(limit)
         }
         case x => println(x)
       }
     }
   }
   
-  def exhaustivelyTransform(g: GrammarCC, file: String): (GrammarCC, TransformerFunction, TransformerFunction) = {
-    val kf = false
-    var (gTrans, fwt, bwt) = transformGrammarWithFile(g, file, maxDepth = Some(80), keepFile = kf)
+  def exhaustivelyTransform(g: GrammarCC, file: String, limit: Option[Int]): (GrammarCC, TransformerFunction, TransformerFunction) = {
+    val transformMethod: GrammarCC => (GrammarCC, TransformerFunction, TransformerFunction) = transformGrammarWithFile(_, file, maxDepth = Some(80), keepFile = false)
+    var (gTrans, fwt, bwt) = transformMethod(g)
     var cont = true
+    var runs = 1
     do {
+      runs = runs + 1
       println("intermediate grammar: ")
       println(gTrans)
       println
-      val (gTrans2, fwt2, bwt2) = transformGrammarWithFile(gTrans, file, maxDepth = Some(80), keepFile = kf)
+      val (gTrans2, fwt2, bwt2) = transformMethod(gTrans)
       
-      if(gTrans.equalRules(gTrans2.rules)) cont = false
+      if(gTrans.equalRules(gTrans2.rules) || (limit.isDefined && limit.get < runs)) cont = false
       else {
         gTrans = gTrans2
         fwt = fwt andThen ((_:TransformationResult).head) andThen (x => {println(x); x}) andThen fwt2

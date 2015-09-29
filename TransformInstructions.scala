@@ -22,13 +22,15 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
   
   def command = rule {(
       ("trans(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> transformGrammarCommand)
-    | ("exhst(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> exhaustivelyTransformGrammar)
+    | ("exhst(" ~ t_optspace ~ t_literal ~ t_optspace ~ optional(t_comma ~ t_optspace ~ t_num ~> (_.toInt)) ~ ")" ~> exhaustivelyTransformGrammar)
     | ("gOrig(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithOriginal)    
     | ("gTran(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> parseWithTransformed)   
     | ("writeGrammar(" ~ t_optspace ~ t_literal ~ t_optspace ~ ")" ~> writeGrammar)
   )}  
     
   def t_optspace         = rule { zeroOrMore(CharPredicate(" \t")) }
+  def t_comma            = CharPredicate(",")
+  def t_num              = rule { capture(oneOrMore(CharPredicate.Digit)) }
   def t_newLine    = CharPredicate("\r\n")
   def t_literal          = rule { 
     ("\"" ~ capture(optional(zeroOrMore(!CharPredicate("\"\n\r") ~ ANY))) ~ "\"") 
@@ -38,7 +40,7 @@ class TransformInstructions(val input: ParserInput) extends Parboiled2Parser[Tra
 object TransformInstructions{
   sealed trait Command
   case class transformGrammarCommand(file: String) extends Command
-  case class exhaustivelyTransformGrammar(file: String) extends Command
+  case class exhaustivelyTransformGrammar(file: String, limit: Option[Int]) extends Command
   case class parseWithOriginal(input: String) extends Command
   case class parseWithTransformed(input: String) extends Command
   case class writeGrammar(file: String) extends Command

@@ -1,4 +1,5 @@
 "leftFactoring.grammar"
 trans("leftFactoring.tr")
+//exhst("leftFactoring2.tr", 2)
 gOrig("if 0 then if 1 then 10 else 0")
 //writeGrammar("leftFactored.grammar")

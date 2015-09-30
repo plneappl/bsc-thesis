@@ -1006,19 +1006,104 @@ After matching all atoms, it returns the gathered information: the modified symb
 Producing a grammar rule is simpler than matching one: Go through all matcher atoms and in most cases the symbol table already tells us everything we need to know or we just need to take literal information out of a matcher. Only when a new nonterminal is introduced we have to be creative. For this, there is a \lstinline{Set} of used symbols, which we check before adding a new nonterminal.
 
 \subsection*{Pattern synonyms}
-\subsubsection*{Automatic generation}
-
 \subsubsection*{Instantiating pattern synonym prototypes}
+Instantiating the pattern synonyms basically means recursively going through them and replacing all matcher types with the mapped grammar types according to the symbol table. This is done by \lstinline{finalizePattern}.
 
+\subsubsection*{Automatic generation}
+Patterns can be automatically inferred from information flow, this is handled by \lstinline{producePatternSynonyms}. To do this it basically tries to infer some order of derivation of grammar rules, so that every part of information is present on both sides. Example:
+\begin{lstlisting}[language=transformer]
+in
+  C -> C_1 S:1 x:2 C:3
+out
+  A -> A_1 A:1 B
+  B -> B_1 x:2 A:3
+     | B_2 x:2
+\end{lstlisting}
+This will expand into the following pattern synonyms one after another (and some others, which fail):
+\begin{lstlisting}[language=transformer]
+C_1 s x c = A_1 s ?              
+C_1 s x c = A_1 s (B_1 x c)
+\end{lstlisting}
+The question mark here denotes a variable with no associated information flow. The following expansion also happens but fails, since the variable \verb|c| is not resolved:
+\begin{lstlisting}[language=transformer]
+C_1 s x c = A_1 s ?
+C_1 s x c = A_1 s (B_2 x)
+\end{lstlisting}
 
-\subsection*{Prolog-definitions}
+\subsection*{Prolog}
+Prolog handles the syntax tree transformation. To talk to Prolog, there's a supplied interface between Prolog and Java, and since Scala compiles to the JVM, we can use it. However it behaves strangely in some cases, which stops us from getting different transformed trees as a stream and other nice-to-have features. \\
+The transformation is done as follows:
+\begin{easylist}
+& load the previously from pattern synonyms translated definitions
+& translate the syntax tree
+& query Prolog
+& translate the answer(s)
+\end{easylist}
 
+\subsubsection*{Pattern synonyms to Prolog definitions}
+Every pattern corresponds to some Prolog definition like
+\begin{lstlisting}[language=Prolog]
+relT1toT2(cA_1(Vc1, Vc2, ...), cA_2(...)) :- 
+  relS1toS2(...),
+  ...
+\end{lstlisting}
+We'll go through the process of translation for three synonyms to show different type errors.\\\\
+{\bfseries Straight translation}\\
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+S_2 (x :: F) = A_1 (x :: F) (R_2 "")
+\end{lstlisting}
+This first pattern describes the relation between $S_2$ and $A_1$: rename the node, put an empty string in the new leaf. The type of the first leaf stays the same, therefore the corresponding Prolog definition is simple:
+\begin{lstlisting}[language=Prolog]
+relStoA(cS_2(VxF), cA_1(VxF, cR_2(''))).
+\end{lstlisting}
+In Prolog relations always start with a lowercase letter, variables always start with an uppercase one. The algorithm denotes relations between types $S$ and $T$ like \lstinline[language=Prolog]{relStoT}, constructors (=rule names) like \lstinline[language=Prolog]{cNT_Name} and variables like \lstinline[language=Prolog]{VinflowTYPE}. Strings in Prolog are delimited by single quotes.\\\\
 
-\subsection*{Syntax tree transformation}
+{\bfseries Type error between variables}\\
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+ (x :: S) = R_1 "+" (x :: A)
+\end{lstlisting}
+As you can see, the variable \verb|x| is not of the same type on the left and right hand side. We therefore have to tell Prolog, that it should try to relate between them by adding a constraint on this variable:
+\begin{lstlisting}[language=Prolog]
+relStoR(VxS, cR_1('+', VxA)) :-
+  relStoA(VxS, VxA).
+\end{lstlisting}
 
+{\bfseries Type error because of missing constructor}\\%how to name this?
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+  S_1 (A_1 (x :: F) (y :: R)) "+" (z :: F) 
+= A_1 (x :: F) (S_1 (y :: S) "+" (z :: F))
+\end{lstlisting}
+In this pattern synonym the constructor for $A_1$ occurs on the left hand side, even though $A$ is a nonterminal of the right hand side's grammar. We therefore have to translate the content of the first leaf of $S_1$, which is of type $R$, to the type $A$. The same holds for the right side. Additionally, we encounter a type error on \verb|y|. Both of these resolved yield the following Prolog code:
+\begin{lstlisting}[language=Prolog]
+relStoA(cS_1(RA_1, '+', VzF), cA_1(VxF, RS_1)) :-
+  relStoR(VyS, VyR),
+  relStoA(RA_1, cA_1(VxF, VyR)),
+  relStoR(cS_1(VyS, '+', VzF), RS_1).
+\end{lstlisting}
 
-\subsection*{Complexity}
+\subsubsection*{Loading definitions}
+The \lstinline{object PrologInterface} comes with a method \lstinline{transformGrammarWithFile}, which takes a grammar and the path to a file containing a transformer object. It returns the transformed grammar and two methods to convert between the grammars. These methods hold the definitions generated like above and on call load the definitions and translate the trees like below. To load the definitions, the methods write them to a temporary file that is loaded and, after transformation, is unloaded and deleted again.
 
+\subsubsection*{Syntax tree translation}
+Syntax trees relate to Prolog terms quite easily: 
+\begin{easylist}
+& Branches correspond to Compounds with a constructor like \lstinline[language=Prolog]{cNT_Name}. The subbranches correspond to the Compound's content and are translated recursively.
+& LeafStrings correspond to Atoms
+& LeafIntegers and LeafFloats correspond to their respective Prolog equivalents Integer and Float
+\end{easylist}
+After transformation, Prolog returns a Term and a Map from String to Term which resolves variables. The backwards translation is therefore equally easy and contains only a bit of string magic.
+
+\subsection*{Time complexity}
+If you've read the above carefully, you'll notice it says a lot of things like "every subset", you might worry about exponential running time. While this is true, it's not relevant at this stage, since:
+\begin{easylist}
+& Grammars and transformers are relatively small compared to the grammars' syntax trees
+& Grammars are transformed once, then multiple trees are transformed (usually)
+& Prolog is way slower, since it explores all transformation paths with the same diligence as we explore all matches
+\end{easylist}
+So yes, runtime is exponential in the size of the grammar and the size of the transformer blocks, but no, it's not that bad, since there is another part in this which is the bigger performance sink. Some speedup in that area therefore would be nice, either in another aproach than the Prolog one or in some guidelines for Prolog how to explore the relations. However this is not part of this thesis' objective.
 
 \section*{Sources}
 \url{http://en.wikipedia.org/wiki/Formal_grammar}

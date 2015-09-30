@@ -773,7 +773,7 @@ object Transform {
     def id = ""
     def getIds = patternContent.map(_.getIds).fold(List())((x, y) => x ++ y)
     def getLength = patternContent.map(_.getLength).fold(0)(_ + _)
-    override def toString = "(" + typ + "_" + patternName + ":" + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ + ")"
+    override def toString = "(" + ruleName + patternContent.fold("")(joinStringsBy(" ")) + " :: " + typ + ")"
     def ruleName = RuleName(typ, patternName)
     override def getTypedVars = patternContent.map(_.getTypedVars).flatten
   }

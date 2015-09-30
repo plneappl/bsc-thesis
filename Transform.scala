@@ -757,17 +757,15 @@ object Transform {
   }
   //for variable terminals 
   sealed trait PatternTerminalTrait extends PatternAtomStandard with hasToTerm {
-    def toTerm = new Variable("V" + id + str)
+    def toTerm = new Variable("V" + id + str.bare)
   }
   
   case class PatternTerminal(id: String, str: GrammarAtom) extends PatternTerminalTrait
   case class PatternInteger(id: String) extends PatternTerminalTrait {
     def str = IntegerTerminal
-    override def toTerm = new Variable("V" + id + "int")
   }
   case class PatternFloat(id: String) extends PatternTerminalTrait {
     def str = FloatTerminal
-    override def toTerm = new Variable("V" + id + "float")
   }
 
 

@@ -3,6 +3,8 @@
 \usepackage{hyperref}
 \usepackage{amsmath}
 \usepackage{amsfonts}
+\usepackage{mathtools}
+\usepackage{marvosym}
 \usepackage[ampersand]{easylist}
 \usepackage{calc}
 %\usepackage{qtree}
@@ -11,6 +13,7 @@
 \usepackage{tikz-qtree}
 \usepackage{tikz-qtree-compat}
 \usepackage{listingsutf8}
+\usepackage{array}
 
 
 \definecolor{darkred}{RGB}{130,10,10}
@@ -34,7 +37,7 @@
 }
 \lstdefinelanguage{transformer}{
   alsoletter={-,<,>,|,_,=,:,::},
-  keywords=[0]{start,begin,end,seq,pattern,auto,force},
+  keywords=[0]{start,begin,end,in,out,seq,pattern,auto,force},
   keywords=[1]{<int>,<float>,:,::,|},
   sensitive=true,
   comment=[l]{//},
@@ -60,6 +63,16 @@
     emph=[1]{=,:,::,|},emphstyle=[1]{\color{darkred}\bfseries}, %some words to emphasise
     %emph=[2]{word1,word2}, emphstyle=[2]{style},    
 }
+
+\section*{Motivation}
+In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, since the trees give some meaning to parts and to the whole word, this is a serious problem.\\
+Also often you'd like to have a grammar employing many features while dealing with a more simple syntax tree after parsing; for example you might like to enable both of these types of variable declarations while only dealing with one of them in your syntax tree:
+\begin{verbatim}
+int (a, b) = (0, 1);
+int c = 0, d = 1;
+\end{verbatim}
+Moreover, many textbooks describe grammar transformations like CNF or left recursion elimination. Implementing these is somewhat complicated and it would be nice to be able to reuse some kind of standard definition for them, also the resulting syntax tree of the starting and the transformed grammar will differ. Therefore finding a more concise, correct way to describe grammar transformations would be nice.\\
+For all of these problems we'll try to find a solution.
 
 \section*{Grammars}
 \subsubsection*{Theory}
@@ -99,7 +112,15 @@ $$N \to (\Sigma\cup N)^* $$
 Context free grammars are much easier handled than those without this limitation, while still being powerful enough to describe the majority of a programming language and most other needed stuff like braced terms etc.
 
 \subsection*{.grammar-file specification}
-\verb|.grammar|-files contain grammar definitions. They are designed to allow easy specification. Given a context-free grammar $G = \tuple{N, \Sigma, P, S}$, it is encoded like this:\\
+\verb|.grammar|-files contain grammar definitions. They are designed to allow easy specification. Here's an example to start:
+\begin{lstlisting}[language=grammar]
+start C
+C -> C_1 S "+" C | C_2 S
+S -> S_3 F "*" S | S_4 F
+F -> F_5 "(" C ")" | F_6 <int>
+\end{lstlisting}
+We'll be using this grammar quite often since it describes arithmetic expressions without using left-recursion and with automatic precedence of "*" over "+". \\
+In general, given a context-free grammar $G = \tuple{N, \Sigma, P, S}$, it is encoded like this:\\
 The starting symbol $S$ ist to be placed on the first line after the keyword \verb|start|, for example \verb|start S|.\\
 Each rule in $P$ is encoded as follows: We first assign each rule a unique name, allowing us to not only parse, but track exactly which rule was used in parsing and building the syntax tree. We call the rule's type together with it's name its constructor, since, when parsing, it constructs a tree; similar to a data constructor in Haskell. Then rules are encoded like this:
 \\\verb|Nonterminal -> Rulename Atoms|\\
@@ -113,23 +134,14 @@ where
 As a shortcut to writing multiple rules with the same type you can write the following:
 \\\verb&Nonterminal -> Rulename Atoms | ... | Rulename Atoms&\\
 You may freely use whitespace in most places, this includes linebreaks before \verb&|&. You may also comment your grammar with \verb|C|-style line comments, i.e. \verb|//comment|.\\
-Some example grammars are included: 
-\begin{easylist}[itemize]
-  & \verb|concrete.grammar|, a grammar for arithmetic expressions
-  & \verb|inlining.grammar| and \verb|leftFactoring.grammar|, simple "if then else"-expressions to test inlining and left-factoring
-  & \verb|simple.grammar|, a most simple grammar for testing
-\end{easylist}
+%Some example grammars are included: 
+%\begin{easylist}[itemize]
+%  & \verb|concrete.grammar|, a grammar for arithmetic expressions
+%  & \verb|inlining.grammar| and \verb|leftFactoring.grammar|, simple "if then else"-expressions to test inlining and left-factoring
+%  & \verb|simple.grammar|, a most simple grammar for testing
+%\end{easylist}
 Both the sets $N$ and $\Sigma$ are defined implicitly.
 
-\section*{Motivation}
-In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser requires more funcionality found in imperative languages and is more complex all around. A recursive descent parser can't handle left-recursive grammars though. Another example is the fast CYK-parsing algorithm, which only works on grammars in CNF (chomsky normal form).\\
-Also often you'd like to have a grammar employing many features while dealing with a more simple syntax tree after parsing; for example you might like to enable both of these types of variable declarations while only dealing with one of them in your syntax tree:
-\begin{verbatim}
-int (a, b) = (0, 1);
-int c = 0, d = 1;
-\end{verbatim}
-Moreover, many textbooks describe grammar transformations like CNF or left recursion elimination. While implementing these is mostly straight forward, in allmost all cases the resulting syntax tree of the starting and the transformed grammar will differ.\\
-For all of these problems we'll try to find a solution.
 
 \section*{Goal}
 The Goal of this thesis is to
@@ -141,79 +153,7 @@ The Goal of this thesis is to
 
 \section*{The DSL}
 \subsection*{Grammar transformation}
-To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. The patterns look similar to rules in the .grammar-files:
-\\\verb|TypeVariable -> Rulename MatcherAtoms|\\
-where again
-\begin{easylist}[itemize]
-  & \verb|TypeVariable| is any alphanumeric sequence beginning with an uppercase letter
-  & \verb|Rulename| is the same type variable followed by an underscore and a unique name
-  & \verb|MatcherAtoms| are one or more 
-  && \verb|NonterminalMatcher| (like nonterminals)
-  && \verb|AnyMatcher|, a underscore followed by a nonterminal-like
-  && \verb|TerminalMatcher|, any string enclosed by double quotation marks, or a special numeric terminal for convenience: \verb|<int>| or \verb|<float>|.
-\end{easylist}
-To define a matcher/producer-pair, we enclose it with "begin" and "end" and prefix the matchers with "in", the producers with "out".\\
-At the start of a "begin"-block you can declare some things:
-\begin{easylist}[itemize]
-  & \verb|NonterminalMatcher = Nonterminal| fixes a NTM to the specified NT
-  & \verb|Rulename = function arguments| fixes NTMs or rule name associations whenever the block is run. \verb|function| is a specifically defined function operating on the arguments. Some are predefined: 
-  && \verb|A_1 = collapse A B_1| will for all matched rule names $B_i\to C_j$ and the association $A\to D$ associate $A_i\to D_j$
-  && \verb|A = newName default| or \verb|A_1 = newRuleName default| will associate the specified matchers with an unused NT or rule name. 
-  & \verb|NonterminalMatcher| will try to associate a NTM to every NT in the input grammar, but not generate it.
-\end{easylist}
-You can nest blocks.
-
-\subsection*{Syntax tree transformation}
-To describe how to transform syntax trees we use pattern synonyms. Pattern synonyms describe how (sub-)trees relate to each other. As an example we'll look at the syntax tree of "$1+2*3$", parsed using \verb|concrete.grammar|:\\
-\Tree [ .C_1
-  [ .S_4 [.F_6 1 ] ] 
-  + 
-  [ .C_2 
-    [.S_3 
-      [.F_6 2 ]  * [ .S_4 [ .F_6 3 ] ]
-    ] 
-  ]
-]
-
-Our transformed tree should no longer differentiate between $Cs, Ss$ and $Fs$. Instead, we want all nodes to have the same type $A$. We'd like to eliminate chains of just $A$s as well. The pattern synonyms for this would look like this:\\
-\begin{lstlisting}[language=transformer]
-  C_1 x p y = A_1 x p y
-  C_2 x     = x :: A
-  S_3 x m y = A_3 x m y
-  ...
-  F_6 x     = A_6 x
-\end{lstlisting}
-The first pattern is obvious: when we encounter a tree constructed by $C_1$ we copy the information inside into a tree of type $A_1$.\\
-The second pattern is a bit more complicated: it states that, when encountering a tree constructed by $C_2$, we take it's children and see how we can transform it to a tree of type $A$ matching on this children.\\
-The lowercase letters in these are variables which will hold a tree. Transforming then is done by applying any matching pattern synonym, and the matching on the resulting children. Patterns may nest like this:\\
-\verb|A_1 (B_2 a) b c = ...|\\
-These patterns can be directly written in the DSL: after declaring the output patterns, write "patterns" followed by your patterns. For more complicated examples see the case studies.\\
-Pattern can be inferred as well: By specifying how information flows between the syntax trees, pattern can be inferred. To do this you can follow a matcher atom with \verb|:ID|, for example \verb|A:1|. Then follow the keyword "pattern" with "auto".\\
-If the information flow is somewhat linear, you can write "seq" instead of "out". This will sequentially number all non-assigned matchers; therefore you can specify the odd ones yourself and let the rest be done automatically.
-
-\subsection*{Transformer-instructions file}
-To easily facilitate the program, there is the so-called transformer-instructions file. With it, you can specify
-\begin{easylist}[itemize]
-& what grammar to load using \verb|"FileName.grammar"|. This has to be the first instruction of the file.
-& what transformations to apply using \verb|trans("FileName.tr")| or \verb|exhst("FileName.tr")|. The first applies the transformer file once, the second one applies ist exhaustively, i.e. until nothing changes by applying it again.
-& what to parse and with which grammar: \verb|gTran("expr")| parses using the transformed grammar and then transforms the syntax tree back to one of the original grammar, \verb|gOrig("expr")| does the opposite.
-& to save the transformed grammar using \verb|writeGrammar("FileName.grammar")|.
-\end{easylist}
-You can chain these commands to save intermediate results or apply multiple transformations. Applying two transformations after another chains them, so the resulting grammar will be
-$$g_1 \to t_2(t_1(g_1))$$
-
-\section*{Case studies}
-\subsection*{concreteToAbstract}
-\subsubsection*{Concrete grammar}
-\begin{lstlisting}[language=grammar]
-start C
-C -> C_1  S "+" C  | C_2 S
-S -> S_3  F "*" S  | S_4 F
-F -> F_5 "(" C ")" | F_6 <int>
-\end{lstlisting}
-
-"Concrete" here means that it really describes what's happening with expressions. Abstract on the other hand gives you more of a general idea about arithmetic expressions without going into the "meaning" as in \\\verb|S| $\iff$ summand\\\verb|F| $\iff$ factor\\ etc.
-\subsubsection*{Transformer}
+To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. Here's an example:
 \begin{lstlisting}[language=transformer]
 start A
 begin
@@ -237,14 +177,71 @@ begin
   end  
 end
 \end{lstlisting}
-\subsubsection*{Transformed grammar}
+Let's go through it part by part:
+\begin{easylist}
+& The first line specifies the starting symbol for the produced grammar, so the produced grammar will have the nonterminal \lstinline[language=transformer]{A} as it's starting symbol.  
+& \lstinline[language=transformer]{begin...end} specifies the begining and and end of a block. A block is applied exhaustively to the input grammar, matching grammar rules and producing new ones. All definitions/bindings/... of a block are scoped and can be overriden by subblocks.
+& The assignment \lstinline[language=transformer]{A = A} means: Assign the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{A} the nonterminal \lstinline[language=transformer]{A}.
+& \lstinline[language=transformer]{A_1} is a rule name. Here it get's bound to the result of the \lstinline[language=scala]{collapse}-function, which evaluates:
+&& the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{A}
+&& the rule name assignment \lstinline[language=transformer]{C_1}
+&& takes the matched nonterminal from the first step and replaces the nonterminal retrieved from the second step by it
+& \lstinline[language=transformer]{in ... out/seq (... pattern (auto) (force))} is a block of matchers, producers, and patterns.
+&& the matchers and producers are similar to grammar rules. They will match a grammar rule of the same length, atom by atom.
+&& patterns are used to specify complex transformations. This will be discussed in detail later.
+\end{easylist}
+
+In general, the file is defined as follows:\\
+The matcher- and producer-patterns look similar to rules in the .grammar-files:
+\\\verb|TypeVariable -> RuleName MatcherAtoms|\\
+where again
+\lstset{language=scala}
+\begin{easylist}[itemize]
+  & \lstinline{TypeVariable} is any alphanumeric sequence beginning with an uppercase letter
+  & \lstinline{RuleName} is the same type variable followed by an underscore and a unique name. Both can be of arbitrary length but must not contain whitespace. Since the type variable is a nonterminal, it must start with an uppercase letter.
+  & \lstinline{MatcherAtoms} are one or more 
+  && \lstinline{NonterminalMatcher} (like nonterminals)
+  && \lstinline{AnyMatcher}, a underscore followed by a nonterminal-like
+  && \lstinline{TerminalMatcher}, any string enclosed by double quotation marks, or a special numeric terminal for convenience: \lstinline[language=transformer]{<int>} or \lstinline[language=transformer]{<float>}.
+\end{easylist}
+\lstset{language=transformer}
+To define a matcher/producer-pair, we enclose it with \lstinline{begin} and \lstinline{end} and prefix the matchers with \lstinline{in}, the producers with \lstinline{out}.\\
+At the start of a \lstinline{begin}-block you can declare some things:
+\begin{easylist}[itemize]
+  & \lstinline{NonterminalMatcher = Nonterminal} fixes a nonterminal matcher to the specified nonterminal, which means that in this scope the nonterminal matcher will only match the specified nonterminal.
+  & \lstinline{Rulename = function arguments} fixes NTMs or rule name associations whenever the block is run. \lstinline{function} is a specifically defined function operating on the arguments. Some are predefined: 
+  && \lstinline{A_1 = collapse A B_1} will for all matched rule names $B_i\to C_j$ and the association $A\to D$ associate $A_i\to D_j$, so if $B_1$ matched some rule named $K_2$ and $A$ matched the nonterminal $U$, $A_1$ will match $U_2$.
+  && \lstinline{A = newName default} or \lstinline{A_1 = newRuleName default} will associate the specified matchers with an unused NT or rule name. 
+  & \lstinline{NonterminalMatcher} will try to associate a NTM to every NT in the input grammar, but not generate it.
+\end{easylist}
+
+
+\subsection*{Syntax tree transformation}
+To describe how to transform syntax trees we use pattern synonyms. Pattern synonyms describe how (sub-)trees relate to each other. As an example we'll look at the syntax tree of an expression produced by \verb|concrete.grammar|:
 \begin{lstlisting}[language=grammar]
-start A
-A -> A_3 A "*" A
-   | A_1 A "+" A
+start C
+C -> C_1 S "+" C | C_2 S
+S -> S_3 F "*" S | S_4 F
+F -> F_5 "(" C ")" | F_6 <int>
+\end{lstlisting}
+$C$ stands for ``concrete'', $S$ for summand, $F$ for factor. The grammar is ``concrete'' in the sense that it tells you what each subterm is by its type. It also defines a precedence overridable with braces: in the corresponding syntax tree of an arithmetic expression produced by this grammar, evaluating a branch by evaluating each child first, replacing the children by their value and then evaluating the branch itself corresponds to the standard evaluation order of the expression itself. The syntax tree of "$1+2*3$" for example is:\\
+\Tree [ .C_1
+  [ .S_4 [.F_6 1 ] ] 
+  + 
+  [ .C_2 
+    [.S_3 
+      [.F_6 2 ]  * [ .S_4 [ .F_6 3 ] ]
+    ] 
+  ]
+]
+
+For most purposes, after parsing we no longer care about the type of the  nodes themselves, the tree's shape gives us enough information to evaluate the expression. Therefore it would be enough to have some equivalent syntax tree produced by the following grammar:
+\begin{lstlisting}[language=grammar]
+A -> A_1 A "+" A
+   | A_3 A "*" A
    | A_6 <int>
 \end{lstlisting}
-\subsubsection*{Sample transformation}
+Our transformed tree should no longer differentiate between $C$s, $S$s and $F$s\subsubsection*{Sample transformation}
 To parse: \verb|2*[4+[3+[22*[11+[2*[3+4]]]]]]|\\
 Parsed: \\
 %n\tikzset{grow'=right} % make trees grow from left to right
@@ -404,7 +401,285 @@ Transformed backwards:\\
 
 The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree, therefore the grammar is ambiguous. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
 This case study also shows that, when removing information from the tree, in this case explicit precedence, the transformation of trees is behaves like a function, whereas when adding information like braces it behaves more like a relation.
+. Instead, we want all nodes to have the same type, $A$ (for ``abstract''). We'd like to eliminate chains of just $A$s as well. The pattern synonyms for this would look like this:
+\begin{lstlisting}[language=transformer]
+  C_1 x p y = A_1 x p y
+  C_2 x     = (x :: A)
+  S_3 x m y = A_3 x m y
+  S_4 x     = (x :: A)
+  F_5 l x r = (x :: A)
+  F_6 x     = A_6 x
+\end{lstlisting}
+The patterns $C_1\ldots$ and $S_3\ldots$ are simple: when we encounter a tree constructed by $C_1/S_3$ we copy the information inside into a tree of type $A_1/A_3$. It corresponds to the following subtree equivalence:\\
+\begin{tabular}{m{3.5em}m{0.4em}m{2cm}}
+\Tree [ .C_1/S_3
+  x p y
+] & = & \Tree [ .A_1/A_3
+  x p y
+]
+\end{tabular}\\
+The lowercase letters in these are variables which will hold some kind of subtree.\\
+The patterns $C_2\ldots$ and $S_4\ldots$ are a bit more complicated: they state that, when encountering a tree constructed by $C_2/S_4$, we take it's children and see how we can transform it to a tree of type $A$ matching on this children. We could also write the first one explicitly like this:
+\begin{lstlisting}
+C_2 (S_3 x m y)                   = A_3 x m y
+C_2 (S_4 (F_6 x))                 = A_6 x 
+C_2 (S_4 (F_5 (C_1 x p y)))       = A_1 x p y 
+C_2 (S_4 (F_5 (C_2 (S_3 x m y)))) = A_3 x m y
+...
+\end{lstlisting}
+\lstset{language=transformer}
+However, we would only be able to specify transformations with a fixed amount of depth. Therefore, the pattern \lstinline{C_2 x =  x :: A} is needed.\\
+Since we know that trees are finite, this ``implicit''-style will terminate, but work without any depth restriction.\\
+As you can see, patterns may nest like this to access subtrees:\\
+\lstinline{A_1 (B_2 a) b c = ...}\\
+These patterns can be directly written in the DSL: after declaring the output patterns, write \lstinline{pattern} followed by your patterns. For more complicated examples see the case studies.\\
+Using all of this, we get the following transformer-file:
+\begin{lstlisting}[language=transformer]
+start A
+begin
+  A = A
+  begin
+    A_1 = collapse A C_1 
+    in
+      C -> C_1 S x C | C_2 S
+    out
+      A -> A_1 A x A
+    pattern
+      C_1 x p y = A_1 x p y
+      C_2 x     = (x :: A)
+  end
+  begin
+    in
+      S -> S_1 x B y | S_2 z
+    out
+      A -> A_2 z
+    pattern 
+      S_1 x y z = (y :: A)
+      S_2 x     = A_2 x
+  end  
+end
+\end{lstlisting}
+The first \lstinline{begin/end}-block will match the rules $C_1$ to $S_4$, binding $C$ to $C$ or $S$ and producing all four pattern synonyms. The second block will match the rules $F_5$ and $F_6$, producing the last two patterns. \\
+Note that \lstinline{S ->  S_1 x B y} does not match \lstinline[language=grammar]{S ->  S_1 F "*" S}, since \lstinline{x} only matches terminals, while \lstinline{B} only matches nonterminals.\\
+Pattern can be inferred as well: By specifying how information flows between the syntax trees, pattern can be inferred. To do this you can follow a matcher atom with \lstinline{:ID}, for example \lstinline{A:1}. Then follow the keyword \lstinline{pattern} with \lstinline{auto}. In the example, this will look like this:
+\begin{lstlisting}[language=transformer]
+start A
+begin
+  A = A
+  begin
+    A_1 = collapse A C_1 
+    in
+      C -> C_1 S:1 x:2 C:3 | C_2 S
+    out
+      A -> A_1 A:1 x:2 A:3
+    pattern auto
+      C_2 x     = (x :: A)
+  end
+  begin
+    in
+      S -> S_1 x B y | S_2 z:1
+    out
+      A -> A_2 z:1
+    pattern auto
+      S_1 x y z = (y :: A)
+  end  
+end
+\end{lstlisting}
+The now missing pattern synonyms are inferred from the information flow. the recursing patterns still have to be written by hand since, as mentioned before, to write down the information flow you would have to write infinitely many recursions to cover all depths. For accessing even more complicated parts of the syntax tree, see the next case study.\\
+If the information flow is somewhat linear, you can write \lstinline{seq} instead of \lstinline{out}. This will sequentially number all non-assigned matchers; therefore you can specify the odd ones yourself and let the rest be done automatically. In the example, this can be used in the first matcher/producer block, since all information flow is sequentially. Note that \lstinline{C_2 S} will be numbered as well to \lstinline{C_2 S:4}, however this does not matter since the information in $4$ can't flow to anywhere and so won't produce any pattern. The final file looks like this:
+\begin{lstlisting}[language=transformer]
+start A
+begin
+  A = A
+  begin
+    A_1 = collapse A C_1 
+    in
+      C -> C_1 S x C | C_2 S
+    seq
+      A -> A_1 A x A
+    pattern auto
+      C_2 x     = (x :: A)
+  end
+  begin
+    in
+      S -> S_1 x B y | S_2 z:1
+    out
+      A -> A_2 z:1
+    pattern auto
+      S_1 x y z = (y :: A)
+  end  
+end
+\end{lstlisting}
+\subsubsection*{Sample transformation}
+Let's look at an actual conversion. We parse \verb|2*[4+[3+[22*[11+[2*[3+4]]]]]]| using the concrete grammar and get:\\
+\tikzset{level distance=25pt}
+\Tree [ .C_2
+  [ .S_3
+    [ .F_6
+      2 ] 
+    *
+    [ .S_4
+      [ .F_5
+        (
+        [ .C_1
+          [ .S_4
+            [ .F_6
+              4 ]  ] 
+          +
+          [ .C_2
+            [ .S_4
+              [ .F_5
+                (
+                [ .C_1
+                  [ .S_4
+                    [ .F_6
+                      3 ]  ] 
+                  +
+                  [ .C_2
+                    [ .S_4
+                      [ .F_5
+                        (
+                        [ .C_2
+                          [ .S_3
+                            [ .F_6
+                              22 ] 
+                            *
+                            [ .S_4
+                              [ .F_5
+                                (
+                                [ .C_1
+                                  [ .S_4
+                                    [ .F_6
+                                      11 ]  ] 
+                                  +
+                                  [ .C_2
+                                    [ .S_4
+                                      [ .F_5
+                                        (
+                                        [ .C_2
+                                          [ .S_3
+                                            [ .F_6
+                                              2 ] 
+                                            *
+                                            [ .S_4
+                                              [ .F_5
+                                                (
+                                                [ .C_1
+                                                  [ .S_4
+                                                    [ .F_6
+                                                      3 ]  ] 
+                                                  +
+                                                  [ .C_2
+                                                    [ .S_4
+                                                      [ .F_6
+                                                        4 ]  ]  ]  ] 
+                                                ) ]  ]  ]  ] 
+                                        ) ]  ]  ]  ] 
+                                ) ]  ]  ]  ] 
+                        ) ]  ]  ]  ] 
+                ) ]  ]  ]  ] 
+        ) ]  ]  ]  ] \\
 
+After the automatic transformation we get the following syntax tree belonging to the abstract grammar: \\
+\Tree [ .A_3
+  [ .A_6
+    2 ]
+  *
+  [ .A_1
+    [ .A_6
+      4 ]
+    +
+    [ .A_1
+      [ .A_6
+        3 ]
+      +
+      [ .A_3
+        [ .A_6
+          22 ]
+        *
+        [ .A_1
+          [ .A_6
+            11 ]
+          +
+          [ .A_3
+            [ .A_6
+              2 ]
+            *
+            [ .A_1
+              [ .A_6
+                3 ]
+              +
+              [ .A_6
+                4 ] ] ] ] ] ] ] ]\\
+
+A backwards transformation is also possible. We get the following tree:\\
+\Tree [ .C_2
+  [ .S_3
+    [ .F_6
+      2 ]
+    *
+    [ .S_4
+      [ .F_5
+        (
+        [ .C_1
+          [ .S_4
+            [ .F_6
+              4 ] ]
+          +
+          [ .C_1
+            [ .S_4
+              [ .F_6
+                3 ] ]
+            +
+            [ .C_2
+              [ .S_3
+                [ .F_6
+                  22 ]
+                *
+                [ .S_4
+                  [ .F_5
+                    (
+                    [ .C_1
+                      [ .S_4
+                        [ .F_6
+                          11 ] ]
+                      +
+                      [ .C_2
+                        [ .S_3
+                          [ .F_6
+                            2 ]
+                          *
+                          [ .S_4
+                            [ .F_5
+                              (
+                              [ .C_1
+                                [ .S_4
+                                  [ .F_6
+                                    3 ] ]
+                                +
+                                [ .C_2
+                                  [ .S_4
+                                    [ .F_6
+                                      4 ] ] ] ]
+                              ) ] ] ] ] ]
+                    ) ] ] ] ] ] ]
+        ) ] ] ] ]\\
+
+The abstract grammar is ambiguous while the concrete grammar is non-ambiguous. Transforming the tree forwards and backwards keeps the precedence of the concrete grammar and it eliminates (or adds) unneeded braces. Obviously there's infinitely many possible ways to insert braces in the tree and All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. In our case this means that tranforming forwards and backwards eliminates unnecessary braces. The forward transformation only produces one tree (in this case study).
+
+
+\subsection*{Transformer-instructions file}
+To easily use the program, there is the so-called transformer-instructions file. With it, you can specify
+\begin{easylist}[itemize]
+& what grammar to load using \verb|"FileName.grammar"|. This has to be the first instruction of the file.
+& what transformations to apply using \verb|trans("FileName.tr")| or \verb|exhst("FileName.tr")|. The first applies the transformer file once, the second one applies ist exhaustively, i.e. until nothing changes by applying it again.
+& what to parse and with which grammar: \verb|gTran("expr")| parses using the transformed grammar and then transforms the syntax tree back to one of the original grammar, \verb|gOrig("expr")| does the opposite.
+& to save the transformed grammar using \verb|writeGrammar("FileName.grammar")|.
+\end{easylist}
+You can chain these commands to save intermediate results or apply multiple transformations. Applying two transformations after another chains them, so the resulting grammar will be
+$$g_1 \to t_2(t_1(g_1))$$
+
+\section*{Case studies}
 \subsection*{Eliminating left-recursion}
 \subsubsection*{Grammar}
 \begin{lstlisting}[language=grammar]
@@ -617,6 +892,20 @@ S -> S_2 "if " E " then " S " else " S
    | S_t <int>
 E -> E_T "1" | E_F "0"
 \end{lstlisting}
+We would like to get some kind of grammar like this:
+\begin{lstlisting}[language=grammar]
+start S
+S -> S_2 S1 S 
+   | S_1 S5 S 
+   | S_t <int>
+E -> E_T "1" | E_F "0"
+S1 -> S1_1 S2 " else "
+S2 -> S2_1 S3 S
+S3 -> S3_1 S4 " then "
+S4 -> S4_1 "if " E
+S5 -> S5_1 S6 " then "
+S6 -> S6_1 "if " E
+\end{lstlisting}
 \subsubsection*{Transformer}
 \begin{lstlisting}[language=transformer]
 start S
@@ -646,7 +935,7 @@ begin
   end
 end
 \end{lstlisting}
-As you can see here, many things can be done automatically and it's easy to write an understandable transformer file. Note the \verb|...D|-atom: it matches one or more nonterminals and terminals. Also note the \verb|force| toggle: it makes the algorithm try harder to transform subtrees. This is needed whenever a subtree's content should change, but it's type stays the same. This is mostly needed when doing exhaustive transformations since you have to keep types unchanged when copying rules, otherwise the algorithm doesn't know when to stop applying rules.\\
+As you can see here, many things can be done automatically and it's easy to write an understandable transformer file. Note the \verb|...D|-atom: it matches one or more nonterminals and terminals. Also note the \verb|force| toggle: it makes the algorithm try harder to transform subtrees. This is needed whenever a subtree's content should change, but it's type stays the same which is mostly needed when doing exhaustive transformations since you have to keep types unchanged when copying rules, otherwise the algorithm doesn't know when to stop applying rules.\\
 Applying this file only once doesn't fully transform the grammar but yields the following:
 \begin{lstlisting}[language=grammar]
 start S
@@ -739,6 +1028,25 @@ Transformed backwards:\\
       3 ] ] ]
 
 \subsection*{Left-factoring}
+\subsubsection*{Grammar}
+\begin{lstlisting}[language=grammar]
+start S
+S -> S_2 "if " E " then " S " else " S
+   | S_1 "if " E " then " S
+   | S_t <int>
+E -> E_T "1"
+   | E_F "0"
+\end{lstlisting}
+\subsubsection{Transformed grammar}
+\begin{lstlisting}[language=grammar]
+start A
+E1 -> E1_T "1"
+    | E1_F "0"
+A -> A_1 "if " E1 " then " A S2
+   | A_t <int>
+S2 -> S2_1 " else " A
+    | S2_2 ""
+\end{lstlisting}
 \subsubsection*{Transformer}
 \begin{lstlisting}[language=transformer]
 start A
@@ -764,25 +1072,6 @@ begin
 end
 \end{lstlisting}
 \subsubsection*{Sample transformation}
-Grammar: 
-\begin{lstlisting}[language=grammar]
-start S
-S -> S_2 "if " E " then " S " else " S
-   | S_1 "if " E " then " S
-   | S_t <int>
-E -> E_T "1"
-   | E_F "0"
-\end{lstlisting}
-Transformed grammar:
-\begin{lstlisting}[language=grammar]
-start A
-E1 -> E1_T "1"
-    | E1_F "0"
-A -> A_1 "if " E1 " then " A S2
-   | A_t <int>
-S2 -> S2_1 " else " A
-    | S2_2 ""
-\end{lstlisting}
 \verb|"if 0 then if 1 then 10 else 0"| parsed:\\
 \Tree [ .S_2
   if
@@ -838,6 +1127,26 @@ Transformed backwards:\\
 
 
 \subsection*{Inlining}
+\subsubsection*{Grammar} 
+\begin{lstlisting}[language=grammar]
+start A
+E1 -> E1_T "1"
+    | E1_F "0"
+A -> A_1 "if " E1 " then " A S2
+   | A_t <int>
+S2 -> S2_1 " else " A
+    | S2_2 ""
+\end{lstlisting}
+\subsubsection*{Transformed grammar}
+\begin{lstlisting}[language=grammar]
+start S
+S -> S_2 "if " E " then " S " else " S
+   | S_1 "if " E " then " S
+   | S_t <int>
+E -> E_T "1"
+   | E_F "0"
+\end{lstlisting}
+
 \subsubsection*{Transformer}
 \begin{lstlisting}[language=transformer]
 start S
@@ -863,25 +1172,6 @@ begin
 end
 \end{lstlisting}
 \subsubsection*{Sample transformation}
-Grammar: 
-\begin{lstlisting}[language=grammar]
-start A
-E1 -> E1_T "1"
-    | E1_F "0"
-A -> A_1 "if " E1 " then " A S2
-   | A_t <int>
-S2 -> S2_1 " else " A
-    | S2_2 ""
-\end{lstlisting}
-Transformed grammar:
-\begin{lstlisting}[language=grammar]
-start S
-S -> S_2 "if " E " then " S " else " S
-   | S_1 "if " E " then " S
-   | S_t <int>
-E -> E_T "1"
-   | E_F "0"
-\end{lstlisting}
 
 \Tree [ .A_1
   if
@@ -1104,6 +1394,24 @@ If you've read the above carefully, you'll notice it says a lot of things like "
 & Prolog is way slower, since it explores all transformation paths with the same diligence as we explore all matches
 \end{easylist}
 So yes, runtime is exponential in the size of the grammar and the size of the transformer blocks, but no, it's not that bad, since there is another part in this which is the bigger performance sink. Some speedup in that area therefore would be nice, either in another aproach than the Prolog one or in some guidelines for Prolog how to explore the relations. However this is not part of this thesis' objective.
+
+\subsection*{Problems}
+In the $.tr$-file, the first line hard-codes the transformed grammar's start symbol. This is unconvenient, but a neccessary evil at this point. We'd like to specify the start symbol depending on the input grammar, specifically when matching and producing rules. However when specifing that the start symbol should be taken from some match of a matcher/producer pair, you won't know from which match in case of multiple matches, in case of no matches you wouldn't know which symbol to take at all, ...\\
+Moreover the matching/producing approach does not define a relationship between the atoms of the input and output grammar, therefore you can't say you'd like to just transform the start symbol like you transformed the rules.\\
+There's multiple solutions I can think of, which all have their drawbacks:
+\begin{easylist}
+\ListProperties(Style2*=\Lightning\,)
+& specify the start symbol in the \verb|.ti|-file instead of the \verb|.tr|-file
+&& while this makes the start symbol independent of the transformation, it only moves the problem but does not solve it. By putting the start symbol in the \verb|.tr|-file at least you can hard code the produced grammar's rules' left hand sides as well.
+& specify the start symbol according to some match, use only the last/first/... match, default to $A$.
+&& This may work in many cases, but it's also difficult to think around and prevents any kind of multitasking when matching/producing.
+& specify no start symbol.
+&& Nope. You wouldn't even be able to define the transformation relation.
+\end{easylist}
+
+\section*{Conclusion}
+Throughout this work we've found that it's not enough to describe how grammar rules change into each other, it's often needed to describe the syntax tree conversions as well.\\
+In some simple cases, describing the information flow may be enough, in other cases pattern synonyms can be enough to express the transformations. It's not clear at this point if there is a need to extend the way of describing the syntax tree conversion further, for example by writing prototype Prolog code.
 
 \section*{Sources}
 \url{http://en.wikipedia.org/wiki/Formal_grammar}

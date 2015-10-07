@@ -65,7 +65,7 @@
 }
 
 \section*{Motivation}
-In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, since the trees give some meaning to parts and to the whole word, this is a serious problem.\\
+In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, since the trees often recursively give meaning to their word, this is a serious problem.\\
 Also often you'd like to have a grammar employing many features while dealing with a more simple syntax tree after parsing; for example you might like to enable both of these types of variable declarations while only dealing with one of them in your syntax tree:
 \begin{verbatim}
 int (a, b) = (0, 1);
@@ -112,7 +112,7 @@ $$N \to (\Sigma\cup N)^* $$
 Context free grammars are much easier handled than those without this limitation, while still being powerful enough to describe the majority of a programming language and most other needed stuff like braced terms etc.
 
 \subsection*{.grammar-file specification}
-\verb|.grammar|-files contain grammar definitions. They are designed to allow easy specification. Here's an example to start:
+To specify grammars for our program we use custom, simple \verb|.grammar|-files. Here's an example to start:
 \begin{lstlisting}[language=grammar]
 start C
 C -> C_1 S "+" C | C_2 S
@@ -152,44 +152,126 @@ The Goal of this thesis is to
 \end{itemize}
 
 \section*{The DSL}
+We'll first look at how to come up with the matchers and producers, and later look at transforming the syntax trees belonging to the grammars. For this, we'll we'll look at the \verb|concrete.grammar| and it's syntax tree:
+\begin{lstlisting}[language=grammar]
+start C
+C -> C_1 S "+" C | C_2 S
+S -> S_3 F "*" S | S_4 F
+F -> F_5 "(" C ")" | F_6 <int>
+\end{lstlisting}
+$C$ stands for ``concrete'', $S$ for summand, $F$ for factor. The grammar is ``concrete'' in the sense that it tells you what each subterm is by its type. It also defines a precedence overridable with braces: in the corresponding syntax tree of an arithmetic expression produced by this grammar, evaluating a branch by evaluating each child first, replacing the children by their value and then evaluating the branch itself corresponds to the standard evaluation order of the expression itself. The syntax tree of "$1+2*3$" for example is:\\
+\Tree [ .C_1
+  [ .S_4 [.F_6 1 ] ] 
+  + 
+  [ .C_2 
+    [.S_3 
+      [.F_6 2 ]  * [ .S_4 [ .F_6 3 ] ]
+    ] 
+  ]
+]
+
+For most purposes, after parsing we no longer care about the type of the nodes themselves, the tree's shape gives us enough information to evaluate the expression. Therefore it would be enough to have some equivalent syntax tree produced by the following grammar:
+\begin{lstlisting}[language=grammar]
+A -> A_1 A "+" A
+   | A_3 A "*" A
+   | A_6 <int>
+\end{lstlisting}
+The corresponding abstract syntax tree of "$1+2*3$" with $*$ having precedence over $+$ is:\\
+\Tree [ .A_1 
+  [ .F_6 1 ]
+  +
+  [ .A_3 [ .F_6 2 ] * [ .F_6 3 ] ]
+]\\
+The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree, therefore the grammar is ambiguous. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
+We want all nodes to have the same type, $A$ (for ``abstract''). We'd like to eliminate chains of just $A$s as well.
 \subsection*{Grammar transformation}
-To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. Here's an example:
+To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. We'll first go through the thougt process of creating those patterns and some other declarations, and later put them together into a complete object.\\
+To match the all rules 
+\begin{lstlisting}[language=grammar]
+C -> C_1 S "+" C | C_2 S
+S -> S_3 F "*" S | S_4 F
+\end{lstlisting}
+we can use the following matcher:
+\lstset{language=transformer}
+\begin{lstlisting}
+Y -> Y_1 Z x Y | Y_2 Z
+\end{lstlisting}
+When matching the first two rules, we'll get the following mapping of MatcherAtoms to GrammarAtoms:
+$$Y\to S, ~Z\to C, ~x\to "+"$$
+while matching the second two rules, we'll get an equivalent mapping.\\
+Since we want to always get the same symbol, we'll first have to map a NonterminalMatcher to it, which is done using the following declaration:
+\begin{lstlisting}
+W = A
+\end{lstlisting}
+Then to produce the first two abstract grammar's rules, we use the following producer:
+\begin{lstlisting}
+W -> W_1 W x W
+\end{lstlisting}
+With the information from matching and our declaration, this produces the following rule after matching the first two concrete rules:
+\begin{lstlisting}[language=grammar]
+A -> A_1 A "+" A
+\end{lstlisting}
+So what is most important about this part of the matching is the information mapped by $x$ and the form of the matched rule. Note, that \lstinline{Y -> Y_1 Z x Y} does not match \lstinline[language=grammar]{S ->  S_1 F "*" S}, since \lstinline{x} only matches terminals, while \lstinline{Y/ Z} only matches nonterminals (and that's what we want). To keep the last rule, we use the following matcher and producer:
+\begin{lstlisting}
+in
+  S -> S_1 x B y | S_2 z:1
+out
+  W -> W_2 z:1
+\end{lstlisting}
+The structured format containing all this information then looks like this:
 \begin{lstlisting}[language=transformer]
 start A
 begin
-  A = A
+  W = A
   begin
-    A_1 = collapse A C_1 
+    W_1 = collapse W C_1 
     in
-      C -> C_1 S x C | C_2 S
+      Y -> Y_1 Z x Y | Y_2 Z
     seq
-      A -> A_1 A x A
+      W -> W_1 W x W
     pattern auto
-      C_2 x = (x :: A)
+      C_2 x = (x :: W)
   end
   begin
     in
       S -> S_1 x B y | S_2 z:1
     out
-      A -> A_2 z:1
+      W -> W_2 z:1
     pattern auto
-      S_1 x (y :: B) z = (y :: A)
+      S_1 x (y :: B) z = (y :: W)
   end  
 end
 \end{lstlisting}
 Let's go through it part by part:
-\begin{easylist}
-& The first line specifies the starting symbol for the produced grammar, so the produced grammar will have the nonterminal \lstinline[language=transformer]{A} as it's starting symbol.  
-& \lstinline[language=transformer]{begin...end} specifies the begining and and end of a block. A block is applied exhaustively to the input grammar, matching grammar rules and producing new ones. All definitions/bindings/... of a block are scoped and can be overriden by subblocks.
-& The assignment \lstinline[language=transformer]{A = A} means: Assign the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{A} the nonterminal \lstinline[language=transformer]{A}.
-& \lstinline[language=transformer]{A_1} is a rule name. Here it get's bound to the result of the \lstinline[language=scala]{collapse}-function, which evaluates:
-&& the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{A}
-&& the rule name assignment \lstinline[language=transformer]{C_1}
-&& takes the matched nonterminal from the first step and replaces the nonterminal retrieved from the second step by it
-& \lstinline[language=transformer]{in ... out/seq (... pattern (auto) (force))} is a block of matchers, producers, and patterns.
-&& the matchers and producers are similar to grammar rules. They will match a grammar rule of the same length, atom by atom.
-&& patterns are used to specify complex transformations. This will be discussed in detail later.
-\end{easylist}
+\begin{itemize}
+\item[Line 1:\hspace{0.5em}] 
+The first line specifies the starting symbol for the produced grammar, so the produced grammar will have the nonterminal \lstinline[language=transformer]{A} as it's starting symbol.  
+\item[{\parbox[t]{\widthof{Lines 2}+0.5em}{Lines 2\\and 21:\vspace{-5em}}}] 
+\lstinline[language=transformer]{begin...end} specifies the begining and and end of a block. A block is applied exhaustively to the input grammar, matching grammar rules and producing new ones. All definitions/bindings/... of a block are scoped and can be overriden by subblocks.
+\item[Line 3:\hspace{0.5em}] 
+Here's the assignment \lstinline[language=transformer]{W = A}. In detail it means: assign the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{W} the nonterminal \lstinline[language=transformer]{A}. This is a constant ``A'' and not one resolved by matching etc.
+\item[Line 5:\hspace{0.5em}] 
+\lstinline[language=transformer]{W_1} is a rule name. Here it get's bound to the result of the \lstinline[language=scala]{collapse}-function, which evaluates:
+\begin{itemize}
+\item 
+the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{W}
+\item 
+the rule name assignment \lstinline[language=transformer]{C_1}
+\item 
+takes the matched nonterminal from the first step and replaces the nonterminal retrieved from the second step by it
+\end{itemize}
+For example, if \lstinline[language=transformer]{W} matched \lstinline[language=grammar]{Abs} and \lstinline[language=transformer]{C_1} matched \lstinline[language=grammar]{Con_sum}, 
+\lstinline[language=transformer]{W_1} will be bound to \lstinline[language=grammar]{Abs_sum}. \\
+It's not needed in our example, since the program tries to guess what name to give unknown rules, but if you want to be sure of the mapped name you can use this function to transfer names to new rules.
+\item[{\parbox[t]{\widthof{Lines 6}+0.5em}{Lines 6\\to 11:\vspace{-5em}}}] 
+\lstinline[language=transformer]{in ... out/seq (... pattern (auto) (force))} is a block of matchers, producers, and patterns.
+\begin{itemize}
+\item[{\parbox[t]{\widthof{Lines 15}+0.5em}{Lines 15\\and 17:\vspace{-5em}}}] 
+Here's our matchers and producers. They will match a grammar rule of the same length, atom by atom. 
+\item[Line 11:\hspace{0.5em}] 
+patterns are used to specify complex transformations. This will be discussed in detail later.
+\end{itemize}
+\end{itemize}
 
 In general, the file is defined as follows:\\
 The matcher- and producer-patterns look similar to rules in the .grammar-files:
@@ -209,7 +291,7 @@ To define a matcher/producer-pair, we enclose it with \lstinline{begin} and \lst
 At the start of a \lstinline{begin}-block you can declare some things:
 \begin{easylist}[itemize]
   & \lstinline{NonterminalMatcher = Nonterminal} fixes a nonterminal matcher to the specified nonterminal, which means that in this scope the nonterminal matcher will only match the specified nonterminal.
-  & \lstinline{Rulename = function arguments} fixes NTMs or rule name associations whenever the block is run. \lstinline{function} is a specifically defined function operating on the arguments. Some are predefined: 
+  & \lstinline{Rulename = function arguments} fixes NTMs or rule name associations whenever the block is run. \lstinline{function} is a specifically defined function operating on the arguments. Some are predefined, although you can add your own quite easily. 
   && \lstinline{A_1 = collapse A B_1} will for all matched rule names $B_i\to C_j$ and the association $A\to D$ associate $A_i\to D_j$, so if $B_1$ matched some rule named $K_2$ and $A$ matched the nonterminal $U$, $A_1$ will match $U_2$.
   && \lstinline{A = newName default} or \lstinline{A_1 = newRuleName default} will associate the specified matchers with an unused NT or rule name. 
   & \lstinline{NonterminalMatcher} will try to associate a NTM to every NT in the input grammar, but not generate it.
@@ -217,191 +299,7 @@ At the start of a \lstinline{begin}-block you can declare some things:
 
 
 \subsection*{Syntax tree transformation}
-To describe how to transform syntax trees we use pattern synonyms. Pattern synonyms describe how (sub-)trees relate to each other. As an example we'll look at the syntax tree of an expression produced by \verb|concrete.grammar|:
-\begin{lstlisting}[language=grammar]
-start C
-C -> C_1 S "+" C | C_2 S
-S -> S_3 F "*" S | S_4 F
-F -> F_5 "(" C ")" | F_6 <int>
-\end{lstlisting}
-$C$ stands for ``concrete'', $S$ for summand, $F$ for factor. The grammar is ``concrete'' in the sense that it tells you what each subterm is by its type. It also defines a precedence overridable with braces: in the corresponding syntax tree of an arithmetic expression produced by this grammar, evaluating a branch by evaluating each child first, replacing the children by their value and then evaluating the branch itself corresponds to the standard evaluation order of the expression itself. The syntax tree of "$1+2*3$" for example is:\\
-\Tree [ .C_1
-  [ .S_4 [.F_6 1 ] ] 
-  + 
-  [ .C_2 
-    [.S_3 
-      [.F_6 2 ]  * [ .S_4 [ .F_6 3 ] ]
-    ] 
-  ]
-]
-
-For most purposes, after parsing we no longer care about the type of the  nodes themselves, the tree's shape gives us enough information to evaluate the expression. Therefore it would be enough to have some equivalent syntax tree produced by the following grammar:
-\begin{lstlisting}[language=grammar]
-A -> A_1 A "+" A
-   | A_3 A "*" A
-   | A_6 <int>
-\end{lstlisting}
-Our transformed tree should no longer differentiate between $C$s, $S$s and $F$s\subsubsection*{Sample transformation}
-To parse: \verb|2*[4+[3+[22*[11+[2*[3+4]]]]]]|\\
-Parsed: \\
-%n\tikzset{grow'=right} % make trees grow from left to right
-%\tikzset{every tree node/.style={anchor=base west}} % allign nodes of the tree to the left (west)
-\tikzset{level distance=25pt}
-\Tree [ .C_2
-  [ .S_3
-    [ .F_6
-      2 ] 
-    *
-    [ .S_4
-      [ .F_5
-        (
-        [ .C_1
-          [ .S_4
-            [ .F_6
-              4 ]  ] 
-          +
-          [ .C_2
-            [ .S_4
-              [ .F_5
-                (
-                [ .C_1
-                  [ .S_4
-                    [ .F_6
-                      3 ]  ] 
-                  +
-                  [ .C_2
-                    [ .S_4
-                      [ .F_5
-                        (
-                        [ .C_2
-                          [ .S_3
-                            [ .F_6
-                              22 ] 
-                            *
-                            [ .S_4
-                              [ .F_5
-                                (
-                                [ .C_1
-                                  [ .S_4
-                                    [ .F_6
-                                      11 ]  ] 
-                                  +
-                                  [ .C_2
-                                    [ .S_4
-                                      [ .F_5
-                                        (
-                                        [ .C_2
-                                          [ .S_3
-                                            [ .F_6
-                                              2 ] 
-                                            *
-                                            [ .S_4
-                                              [ .F_5
-                                                (
-                                                [ .C_1
-                                                  [ .S_4
-                                                    [ .F_6
-                                                      3 ]  ] 
-                                                  +
-                                                  [ .C_2
-                                                    [ .S_4
-                                                      [ .F_6
-                                                        4 ]  ]  ]  ] 
-                                                ) ]  ]  ]  ] 
-                                        ) ]  ]  ]  ] 
-                                ) ]  ]  ]  ] 
-                        ) ]  ]  ]  ] 
-                ) ]  ]  ]  ] 
-        ) ]  ]  ]  ] \\
-
-Transformed: \\
-\Tree [ .A_3
-  [ .A_6
-    2 ]
-  *
-  [ .A_1
-    [ .A_6
-      4 ]
-    +
-    [ .A_1
-      [ .A_6
-        3 ]
-      +
-      [ .A_3
-        [ .A_6
-          22 ]
-        *
-        [ .A_1
-          [ .A_6
-            11 ]
-          +
-          [ .A_3
-            [ .A_6
-              2 ]
-            *
-            [ .A_1
-              [ .A_6
-                3 ]
-              +
-              [ .A_6
-                4 ] ] ] ] ] ] ] ]\\
-
-Transformed backwards:\\
-\Tree [ .C_2
-  [ .S_3
-    [ .F_6
-      2 ]
-    *
-    [ .S_4
-      [ .F_5
-        (
-        [ .C_1
-          [ .S_4
-            [ .F_6
-              4 ] ]
-          +
-          [ .C_1
-            [ .S_4
-              [ .F_6
-                3 ] ]
-            +
-            [ .C_2
-              [ .S_3
-                [ .F_6
-                  22 ]
-                *
-                [ .S_4
-                  [ .F_5
-                    (
-                    [ .C_1
-                      [ .S_4
-                        [ .F_6
-                          11 ] ]
-                      +
-                      [ .C_2
-                        [ .S_3
-                          [ .F_6
-                            2 ]
-                          *
-                          [ .S_4
-                            [ .F_5
-                              (
-                              [ .C_1
-                                [ .S_4
-                                  [ .F_6
-                                    3 ] ]
-                                +
-                                [ .C_2
-                                  [ .S_4
-                                    [ .F_6
-                                      4 ] ] ] ]
-                              ) ] ] ] ] ]
-                    ) ] ] ] ] ] ]
-        ) ] ] ] ]\\
-
-The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree, therefore the grammar is ambiguous. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
-This case study also shows that, when removing information from the tree, in this case explicit precedence, the transformation of trees is behaves like a function, whereas when adding information like braces it behaves more like a relation.
-. Instead, we want all nodes to have the same type, $A$ (for ``abstract''). We'd like to eliminate chains of just $A$s as well. The pattern synonyms for this would look like this:
+To describe how to transform syntax trees we use pattern synonyms. Pattern synonyms describe how (sub-)trees relate to each other. Again we use the concrete and abstract grammar as an example. The pattern synonyms for transforming between them would look like this (with the concrete grammar on the left side and the abstract grammar on the right):
 \begin{lstlisting}[language=transformer]
   C_1 x p y = A_1 x p y
   C_2 x     = (x :: A)
@@ -437,76 +335,75 @@ Using all of this, we get the following transformer-file:
 \begin{lstlisting}[language=transformer]
 start A
 begin
-  A = A
+  W = A
   begin
-    A_1 = collapse A C_1 
+    W_1 = collapse W C_1 
     in
-      C -> C_1 S x C | C_2 S
+      Y -> Y_1 Z x Y | Y_2 Z
     out
-      A -> A_1 A x A
+      W -> W_1 W x W
     pattern
-      C_1 x p y = A_1 x p y
-      C_2 x     = (x :: A)
+      Y_1 x p y = W_1 x p y
+      Y_2 x     = (x :: W)
   end
   begin
     in
       S -> S_1 x B y | S_2 z
     out
-      A -> A_2 z
+      W -> W_2 z
     pattern 
-      S_1 x y z = (y :: A)
-      S_2 x     = A_2 x
+      S_1 x y z = (y :: W)
+      S_2 x     = W_2 x
   end  
 end
 \end{lstlisting}
-The first \lstinline{begin/end}-block will match the rules $C_1$ to $S_4$, binding $C$ to $C$ or $S$ and producing all four pattern synonyms. The second block will match the rules $F_5$ and $F_6$, producing the last two patterns. \\
-Note that \lstinline{S ->  S_1 x B y} does not match \lstinline[language=grammar]{S ->  S_1 F "*" S}, since \lstinline{x} only matches terminals, while \lstinline{B} only matches nonterminals.\\
-Pattern can be inferred as well: By specifying how information flows between the syntax trees, pattern can be inferred. To do this you can follow a matcher atom with \lstinline{:ID}, for example \lstinline{A:1}. Then follow the keyword \lstinline{pattern} with \lstinline{auto}. In the example, this will look like this:
+The first \lstinline{begin/end}-block will match the rules $C_1$ to $S_4$, binding $Y$ to $C$ or $S$ etc. and producing all four pattern synonyms. The second block will match the rules $F_5$ and $F_6$, producing the last two patterns. \\
+Pattern can be inferred as well: By specifying how information flows between the syntax trees, pattern can be inferred. To do this you can follow a matcher atom with \lstinline{:ID}, for example \lstinline{W:1}. The \lstinline{:ID} may be any character sequence without whitespace. Then follow the keyword \lstinline{pattern} with \lstinline{auto}. In the example, this will look like this:
 \begin{lstlisting}[language=transformer]
 start A
 begin
-  A = A
+  W = A
   begin
-    A_1 = collapse A C_1 
+    W_1 = collapse W C_1 
     in
-      C -> C_1 S:1 x:2 C:3 | C_2 S
+      Y -> Y_1 Z:1 x:2 Y:3 | Y_2 Z
     out
-      A -> A_1 A:1 x:2 A:3
+      W -> W_1 W:1 x:2 W:3
     pattern auto
-      C_2 x     = (x :: A)
+      Y_2 x     = (x :: W)
   end
   begin
     in
       S -> S_1 x B y | S_2 z:1
     out
-      A -> A_2 z:1
+      W -> W_2 z:1
     pattern auto
-      S_1 x y z = (y :: A)
+      S_1 x y z = (y :: W)
   end  
 end
 \end{lstlisting}
 The now missing pattern synonyms are inferred from the information flow. the recursing patterns still have to be written by hand since, as mentioned before, to write down the information flow you would have to write infinitely many recursions to cover all depths. For accessing even more complicated parts of the syntax tree, see the next case study.\\
-If the information flow is somewhat linear, you can write \lstinline{seq} instead of \lstinline{out}. This will sequentially number all non-assigned matchers; therefore you can specify the odd ones yourself and let the rest be done automatically. In the example, this can be used in the first matcher/producer block, since all information flow is sequentially. Note that \lstinline{C_2 S} will be numbered as well to \lstinline{C_2 S:4}, however this does not matter since the information in $4$ can't flow to anywhere and so won't produce any pattern. The final file looks like this:
+If the information flow is somewhat linear, you can write \lstinline{seq} instead of \lstinline{out}. This will sequentially number all non-assigned matchers; therefore you can specify the odd ones yourself and let the rest be done automatically. In the example, this can be used in the first matcher/producer block, since all information flow is sequentially. Note that \lstinline{Y_2 Z} will be numbered as well to \lstinline{Y_2 Z:4}, however this does not matter since the information in $4$ can't flow to anywhere and so won't produce any pattern. The final file looks like this:
 \begin{lstlisting}[language=transformer]
 start A
 begin
-  A = A
+  W = A
   begin
-    A_1 = collapse A C_1 
+    W_1 = collapse W C_1 
     in
-      C -> C_1 S x C | C_2 S
+      Y -> Y_1 Z x Y | Y_2 Z
     seq
-      A -> A_1 A x A
+      W -> W_1 W x W
     pattern auto
-      C_2 x     = (x :: A)
+      Y_2 x     = (x :: W)
   end
   begin
     in
       S -> S_1 x B y | S_2 z:1
     out
-      A -> A_2 z:1
+      W -> W_2 z:1
     pattern auto
-      S_1 x y z = (y :: A)
+      S_1 x y z = (y :: W)
   end  
 end
 \end{lstlisting}
@@ -678,6 +575,189 @@ To easily use the program, there is the so-called transformer-instructions file.
 \end{easylist}
 You can chain these commands to save intermediate results or apply multiple transformations. Applying two transformations after another chains them, so the resulting grammar will be
 $$g_1 \to t_2(t_1(g_1))$$
+
+\section*{Inner workings}
+\lstset{language=scala}
+\subsection*{.tr to syntax tree transformations}
+The transformation process consists of the following steps:
+\begin{easylist}[enumerate]
+& Matching grammar rules:
+&& Compare atom by atom
+&& Keep track of new matches in three different tables:
+&&& The \lstinline{SymbolTable} keeps track of exact matches, i.e. MatcherAtom \verb|S| matches GrammarAtom \verb|A| or \verb|"xyz"|
+&&& The \lstinline{RuleNameTable} keeps track of which rule-matcher matches which grammar rule
+&&& The \lstinline{NameTable} keeps track only what the matched rules' names were
+& Producing grammar rules:
+&& for each matched block of rules, produce grammar rules atom by atom, looking up MatcherAtoms in the \lstinline{SymbolTable} and guess them if not yet existing
+& From pattern-synonym prototypes and information flow, produce pattern-synonyms
+& Translate pattern-synonyms to Prolog-definitions
+\end{easylist}
+
+\subsection*{Different atomic and composite types}
+%uninteresting?
+\begin{easylist}[itemize]
+ & \lstinline{GrammarAtom}s are used to represent the right side of grammar rules. There are the following subatoms:
+&& \lstinline{Nonterminal}s 
+&& \lstinline{TerminalLike}: \lstinline{Terminal}s ("abc"), \lstinline{Regex}s ("[0-9a-z]".r), \lstinline{IntegerTerminals} and \lstinline{FloatTerminals} (\lstinline[language=transformer]{<int>/ <float>})
+&& \lstinline{GrammarAtomSequence}: used to capture matched \verb|...|s, can be used in parsing.
+ & \lstinline{TransformerAtom}s are used to represent everything on the right side of matcher and production rules. There's the following subatoms:
+&& \lstinline{AnyMatcher} matches any \lstinline{GrammarAtom}
+&& \lstinline{NonterminalMatcher}, \lstinline{TerminalMatcher} match anything of their respective type
+&& \lstinline{LiteralMatcher} matches all \lstinline{Terminal}s with the exact same string
+&& \lstinline{IntegerMatcher} and \lstinline{FloatMatcher} match \lstinline{IntegerTerminal}s and \lstinline{FloatTerminal}s
+&& \lstinline{RestMatcher} is used to associate with a \lstinline{GrammarAtomSequence}. It is used before matching atom by atom.
+ & \lstinline{PatternAtom}s make up the contents of both sides of a pattern-synonym:
+&& \lstinline{PatternLiteral}s, \lstinline{PatternTerminal}s, \lstinline{PatternInteger}s and \lstinline{PatternFloat}s are analogous to \lstinline{TransformerAtom}s.
+&& \lstinline{TypedPatternVariable}s correspond to \lstinline{Nonterminal}s and \lstinline{NonterminalMatcher}s. After instantiating they are what determines different type errors.
+&& \lstinline{PatternAtomPrototype}s are generated by the parser when parsing \verb|.tr|-files. They later get instantiated to all other pattern atoms after rules have been matched and produced.
+&& \lstinline{ExtractorPattern} is a special atom generated by the parser to represent a "loosely typed" pattern side, i.e. the left hand side in \lstinline[language=transformer]{(x :: S) = R_1 t x}. They are modified slightly when instantiating \lstinline{PatternAtomPrototype}s.
+&& \lstinline{TypedPattern} holds a sequence of \lstinline{PatternAtom}s. It is a \lstinline{PatternAtom} itself to model pattern synonyms like \lstinline[language=transformer]{S_1 (S1_1 x y) t z = S1_1 x (S_1 y t z)}.
+\end{easylist}
+
+%already talked about in "inner workings"
+%\subsection*{Tables}
+
+\subsection*{Applying a transformer block}
+To apply a transformer block, that is a set of in and out rules and pattern synonym prototypes, we have to do the following:
+\begin{easylist}
+& Match every in-rule to a grammar-rule. For this, we select every subset of the same size out of the grammar's rules and try matching rule-by-rule, atom-by-atom. This aproach was choosen since we wouldn't know if the first successful match was the one intended if we'd stop after it.
+& For every match found this way we get a symbol table, rule-name-table and a name table. With each of these three, we produce a grammar-rule for every out-rule. 
+\end{easylist}
+This all is done in \lstinline{applyRule}. \\
+It get's called by \lstinline{applyMatcherAndTransformer}, which then
+\begin{easylist}
+& collects these rules and patterns
+& calls \lstinline{producePatternSynonyms}, which does automatic pattern generation
+& instantiates pattern-synonym-prototypes
+& translates pattern-synonyms to Prolog definitions
+\end{easylist}
+
+\subsubsection*{Matching rules}
+Matching one grammar rule to a matcher is done in \lstinline{matches}. After putting everything from a grammar rule longer than a matcher inside a rest matcher (if available), it goes through every pair of grammar and matcher atoms and checks the symbol table, if it should continue: 
+\begin{easylist}
+& If the matcher atom is already in the symbol table, continue if the corresponding grammar atom is the same
+& If the matcher atom is not found in the symbol table, add the pair of atoms to it and continue
+& Otherwise matching fails in this run
+\end{easylist}
+After matching all atoms, it returns the gathered information: the modified symbol table. The symbol table also holds the \lstinline{restMatcher}/\lstinline{GrammarAtomSequence} match.
+
+\subsubsection*{Producing rules}
+Producing a grammar rule is simpler than matching one: Go through all matcher atoms and in most cases the symbol table already tells us everything we need to know or we just need to take literal information out of a matcher. Only when a new nonterminal is introduced we have to be creative. For this, there is a \lstinline{Set} of used symbols, which we check before adding a new nonterminal.
+
+\subsection*{Pattern synonyms}
+\subsubsection*{Instantiating pattern synonym prototypes}
+Instantiating the pattern synonyms basically means recursively going through them and replacing all matcher types with the mapped grammar types according to the symbol table. This is done by \lstinline{finalizePattern}.
+
+\subsubsection*{Automatic generation}
+Patterns can be automatically inferred from information flow, this is handled by \lstinline{producePatternSynonyms}. To do this it basically tries to infer some order of derivation of grammar rules, so that every part of information is present on both sides. Example:
+\begin{lstlisting}[language=transformer]
+in
+  C -> C_1 S:1 x:2 C:3
+out
+  A -> A_1 A:1 B
+  B -> B_1 x:2 A:3
+     | B_2 x:2
+\end{lstlisting}
+This will expand into the following pattern synonyms one after another (and some others, which fail):
+\begin{lstlisting}[language=transformer]
+C_1 s x c = A_1 s ?              
+C_1 s x c = A_1 s (B_1 x c)
+\end{lstlisting}
+The question mark here denotes a variable with no associated information flow. The following expansion also happens but fails, since the variable \verb|c| is not resolved:
+\begin{lstlisting}[language=transformer]
+C_1 s x c = A_1 s ?
+C_1 s x c = A_1 s (B_2 x)
+\end{lstlisting}
+
+\subsection*{Prolog}
+Prolog handles the syntax tree transformation. To talk to Prolog, there's a supplied interface between Prolog and Java, and since Scala compiles to the JVM, we can use it. However it behaves strangely in some cases, which stops us from getting different transformed trees as a stream and other nice-to-have features. \\
+The transformation is done as follows:
+\begin{easylist}
+& load the previously from pattern synonyms translated definitions
+& translate the syntax tree
+& query Prolog
+& translate the answer(s)
+\end{easylist}
+
+\subsubsection*{Pattern synonyms to Prolog definitions}
+Every pattern corresponds to some Prolog definition like
+\begin{lstlisting}[language=Prolog]
+relT1toT2(cA_1(Vc1, Vc2, ...), cA_2(...)) :- 
+  relS1toS2(...),
+  ...
+\end{lstlisting}
+We'll go through the process of translation for three synonyms to show different type errors.\\\\
+{\bfseries Straight translation}\\
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+S_2 (x :: F) = A_1 (x :: F) (R_2 "")
+\end{lstlisting}
+This first pattern describes the relation between $S_2$ and $A_1$: rename the node, put an empty string in the new leaf. The type of the first leaf stays the same, therefore the corresponding Prolog definition is simple:
+\begin{lstlisting}[language=Prolog]
+relStoA(cS_2(VxF), cA_1(VxF, cR_2(''))).
+\end{lstlisting}
+In Prolog relations always start with a lowercase letter, variables always start with an uppercase one. The algorithm denotes relations between types $S$ and $T$ like \lstinline[language=Prolog]{relStoT}, constructors (=rule names) like \lstinline[language=Prolog]{cNT_Name} and variables like \lstinline[language=Prolog]{VinflowTYPE}. Strings in Prolog are delimited by single quotes.\\\\
+
+{\bfseries Type error between variables}\\
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+ (x :: S) = R_1 "+" (x :: A)
+\end{lstlisting}
+As you can see, the variable \verb|x| is not of the same type on the left and right hand side. We therefore have to tell Prolog, that it should try to relate between them by adding a constraint on this variable:
+\begin{lstlisting}[language=Prolog]
+relStoR(VxS, cR_1('+', VxA)) :-
+  relStoA(VxS, VxA).
+\end{lstlisting}
+
+{\bfseries Type error because of missing constructor}\\%how to name this?
+Pattern synonym:
+\begin{lstlisting}[language=transformer]
+  S_1 (A_1 (x :: F) (y :: R)) "+" (z :: F) 
+= A_1 (x :: F) (S_1 (y :: S) "+" (z :: F))
+\end{lstlisting}
+In this pattern synonym the constructor for $A_1$ occurs on the left hand side, even though $A$ is a nonterminal of the right hand side's grammar. We therefore have to translate the content of the first leaf of $S_1$, which is of type $R$, to the type $A$. The same holds for the right side. Additionally, we encounter a type error on \verb|y|. Both of these resolved yield the following Prolog code:
+\begin{lstlisting}[language=Prolog]
+relStoA(cS_1(RA_1, '+', VzF), cA_1(VxF, RS_1)) :-
+  relStoR(VyS, VyR),
+  relStoA(RA_1, cA_1(VxF, VyR)),
+  relStoR(cS_1(VyS, '+', VzF), RS_1).
+\end{lstlisting}
+
+\subsubsection*{Loading definitions}
+The \lstinline{object PrologInterface} comes with a method \lstinline{transformGrammarWithFile}, which takes a grammar and the path to a file containing a transformer object. It returns the transformed grammar and two methods to convert between the grammars. These methods hold the definitions generated like above and on call load the definitions and translate the trees like below. To load the definitions, the methods write them to a temporary file that is loaded and, after transformation, is unloaded and deleted again.
+
+\subsubsection*{Syntax tree translation}
+Syntax trees relate to Prolog terms quite easily: 
+\begin{easylist}
+& Branches correspond to Compounds with a constructor like \lstinline[language=Prolog]{cNT_Name}. The subbranches correspond to the Compound's content and are translated recursively.
+& LeafStrings correspond to Atoms
+& LeafIntegers and LeafFloats correspond to their respective Prolog equivalents Integer and Float
+\end{easylist}
+After transformation, Prolog returns a Term and a Map from String to Term which resolves variables. The backwards translation is therefore equally easy and contains only a bit of string magic.
+
+\subsection*{Time complexity}
+If you've read the above carefully, you'll notice it says a lot of things like "every subset", you might worry about exponential running time. While this is true, it's not relevant at this stage, since:
+\begin{easylist}
+& Grammars and transformers are relatively small compared to the grammars' syntax trees
+& Grammars are transformed once, then multiple trees are transformed (usually)
+& Prolog is way slower, since it explores all transformation paths with the same diligence as we explore all matches
+\end{easylist}
+So yes, runtime is exponential in the size of the grammar and the size of the transformer blocks, but no, it's not that bad, since there is another part in this which is the bigger performance sink. Some speedup in that area therefore would be nice, either in another aproach than the Prolog one or in some guidelines for Prolog how to explore the relations. However this is not part of this thesis' objective.
+
+\subsection*{Problems}
+In the $.tr$-file, the first line hard-codes the transformed grammar's start symbol. This is unconvenient, but a neccessary evil at this point. We'd like to specify the start symbol depending on the input grammar, specifically when matching and producing rules. However when specifing that the start symbol should be taken from some match of a matcher/producer pair, you won't know from which match in case of multiple matches, in case of no matches you wouldn't know which symbol to take at all, ...\\
+Moreover the matching/producing approach does not define a relationship between the atoms of the input and output grammar, therefore you can't say you'd like to just transform the start symbol like you transformed the rules.\\
+There's multiple solutions I can think of, which all have their drawbacks:
+\begin{easylist}
+\ListProperties(Style2*=\Lightning\,)
+& specify the start symbol in the \verb|.ti|-file instead of the \verb|.tr|-file
+&& while this makes the start symbol independent of the transformation, it only moves the problem but does not solve it. By putting the start symbol in the \verb|.tr|-file at least you can hard code the produced grammar's rules' left hand sides as well.
+& specify the start symbol according to some match, use only the last/first/... match, default to $A$.
+&& This may work in many cases, but it's also difficult to think around and prevents any kind of multitasking when matching/producing.
+& specify no start symbol.
+&& Nope. You wouldn't even be able to define the transformation relation.
+\end{easylist}
+
 
 \section*{Case studies}
 \subsection*{Eliminating left-recursion}
@@ -1227,191 +1307,14 @@ end
   [ .S2_2
      ] ]
 
-\section*{Inner workings}
-\lstset{language=scala}
-\subsection*{.tr to syntax tree transformations}
-The transformation process consists of the following steps:
-\begin{easylist}[enumerate]
-& Matching grammar rules:
-&& Compare atom by atom
-&& Keep track of new matches in three different tables:
-&&& The \lstinline{SymbolTable} keeps track of exact matches, i.e. MatcherAtom \verb|S| matches GrammarAtom \verb|A| or \verb|"xyz"|
-&&& The \lstinline{RuleNameTable} keeps track of which rule-matcher matches which grammar rule
-&&& The \lstinline{NameTable} keeps track only what the matched rules' names were
-& Producing grammar rules:
-&& for each matched block of rules, produce grammar rules atom by atom, looking up MatcherAtoms in the \lstinline{SymbolTable} and guess them if not yet existing
-& From pattern-synonym prototypes and information flow, produce pattern-synonyms
-& Translate pattern-synonyms to Prolog-definitions
-\end{easylist}
-
-\subsection*{Different atomic and composite types}
-%uninteresting?
-\begin{easylist}[itemize]
- & \lstinline{GrammarAtom}s are used to represent the right side of grammar rules. There are the following subatoms:
-&& \lstinline{Nonterminal}s 
-&& \lstinline{TerminalLike}: \lstinline{Terminal}s ("abc"), \lstinline{Regex}s ("[0-9a-z]".r), \lstinline{IntegerTerminal}s and \lstinline{FloatTerminal}s (<int>/<float>)
-&& \lstinline{GrammarAtomSequence}: used to capture matched \verb|...|s, can be used in parsing.
- & \lstinline{TransformerAtom}s are used to represent everything on the right side of matcher and production rules. There's the following subatoms:
-&& \lstinline{AnyMatcher} matches any \lstinline{GrammarAtom}
-&& \lstinline{NonterminalMatcher}, \lstinline{TerminalMatcher} match anything of their respective type
-&& \lstinline{LiteralMatcher} matches all \lstinline{Terminal}s with the exact same string
-&& \lstinline{IntegerMatcher} and \lstinline{FloatMatcher} match \lstinline{IntegerTerminal}s and \lstinline{FloatTerminal}s
-&& \lstinline{RestMatcher} is used to associate with a \lstinline{GrammarAtomSequence}. It is used before matching atom by atom.
- & \lstinline{PatternAtom}s make up the contents of both sides of a pattern-synonym:
-&& \lstinline{PatternLiteral}s, \lstinline{PatternTerminal}s, \lstinline{PatternInteger}s and \lstinline{PatternFloat}s are analogous to \lstinline{TransformerAtom}s.
-&& \lstinline{TypedPatternVariable}s correspond to \lstinline{Nonterminal}s and \lstinline{NonterminalMatcher}s. After instantiating they are what determines different type errors.
-&& \lstinline{PatternAtomPrototype}s are generated by the parser when parsing \verb|.tr|-files. They later get instantiated to all other pattern atoms after rules have been matched and produced.
-&& \lstinline{ExtractorPattern} is a special atom generated by the parser to represent a "loosely typed" pattern side, i.e. the left hand side in \lstinline[language=transformer]{(x :: S) = R_1 t x}. They are modified slightly when instantiating \lstinline{PatternAtomPrototype}s.
-&& \lstinline{TypedPattern} holds a sequence of \lstinline{PatternAtom}s. It is a \lstinline{PatternAtom} itself to model pattern synonyms like \lstinline[language=transformer]{S_1 (S1_1 x y) t z = S1_1 x (S_1 y t z)}.
-\end{easylist}
-
-%already talked about in "inner workings"
-%\subsection*{Tables}
-
-\subsection*{Applying a transformer block}
-To apply a transformer block, that is a set of in and out rules and pattern synonym prototypes, we have to do the following:
-\begin{easylist}
-& Match every in-rule to a grammar-rule. For this, we select every subset of the same size out of the grammar's rules and try matching rule-by-rule, atom-by-atom. This aproach was choosen since we wouldn't know if the first successful match was the one intended if we'd stop after it.
-& For every match found this way we get a symbol table, rule-name-table and a name table. With each of these three, we produce a grammar-rule for every out-rule. 
-\end{easylist}
-This all is done in \lstinline{applyRule}. \\
-It get's called by \lstinline{applyMatcherAndTransformer}, which then
-\begin{easylist}
-& collects these rules and patterns
-& calls \lstinline{producePatternSynonyms}, which does automatic pattern generation
-& instantiates pattern-synonym-prototypes
-& translates pattern-synonyms to Prolog definitions
-\end{easylist}
-
-\subsubsection*{Matching rules}
-Matching one grammar rule to a matcher is done in \lstinline{matches}. After putting everything from a grammar rule longer than a matcher inside a rest matcher (if available), it goes through every pair of grammar and matcher atoms and checks the symbol table, if it should continue: 
-\begin{easylist}
-& If the matcher atom is already in the symbol table, continue if the corresponding grammar atom is the same
-& If the matcher atom is not found in the symbol table, add the pair of atoms to it and continue
-& Otherwise matching fails in this run
-\end{easylist}
-After matching all atoms, it returns the gathered information: the modified symbol table. The symbol table also holds the \lstinline{restMatcher}/\lstinline{GrammarAtomSequence} match.
-
-\subsubsection*{Producing rules}
-Producing a grammar rule is simpler than matching one: Go through all matcher atoms and in most cases the symbol table already tells us everything we need to know or we just need to take literal information out of a matcher. Only when a new nonterminal is introduced we have to be creative. For this, there is a \lstinline{Set} of used symbols, which we check before adding a new nonterminal.
-
-\subsection*{Pattern synonyms}
-\subsubsection*{Instantiating pattern synonym prototypes}
-Instantiating the pattern synonyms basically means recursively going through them and replacing all matcher types with the mapped grammar types according to the symbol table. This is done by \lstinline{finalizePattern}.
-
-\subsubsection*{Automatic generation}
-Patterns can be automatically inferred from information flow, this is handled by \lstinline{producePatternSynonyms}. To do this it basically tries to infer some order of derivation of grammar rules, so that every part of information is present on both sides. Example:
-\begin{lstlisting}[language=transformer]
-in
-  C -> C_1 S:1 x:2 C:3
-out
-  A -> A_1 A:1 B
-  B -> B_1 x:2 A:3
-     | B_2 x:2
-\end{lstlisting}
-This will expand into the following pattern synonyms one after another (and some others, which fail):
-\begin{lstlisting}[language=transformer]
-C_1 s x c = A_1 s ?              
-C_1 s x c = A_1 s (B_1 x c)
-\end{lstlisting}
-The question mark here denotes a variable with no associated information flow. The following expansion also happens but fails, since the variable \verb|c| is not resolved:
-\begin{lstlisting}[language=transformer]
-C_1 s x c = A_1 s ?
-C_1 s x c = A_1 s (B_2 x)
-\end{lstlisting}
-
-\subsection*{Prolog}
-Prolog handles the syntax tree transformation. To talk to Prolog, there's a supplied interface between Prolog and Java, and since Scala compiles to the JVM, we can use it. However it behaves strangely in some cases, which stops us from getting different transformed trees as a stream and other nice-to-have features. \\
-The transformation is done as follows:
-\begin{easylist}
-& load the previously from pattern synonyms translated definitions
-& translate the syntax tree
-& query Prolog
-& translate the answer(s)
-\end{easylist}
-
-\subsubsection*{Pattern synonyms to Prolog definitions}
-Every pattern corresponds to some Prolog definition like
-\begin{lstlisting}[language=Prolog]
-relT1toT2(cA_1(Vc1, Vc2, ...), cA_2(...)) :- 
-  relS1toS2(...),
-  ...
-\end{lstlisting}
-We'll go through the process of translation for three synonyms to show different type errors.\\\\
-{\bfseries Straight translation}\\
-Pattern synonym:
-\begin{lstlisting}[language=transformer]
-S_2 (x :: F) = A_1 (x :: F) (R_2 "")
-\end{lstlisting}
-This first pattern describes the relation between $S_2$ and $A_1$: rename the node, put an empty string in the new leaf. The type of the first leaf stays the same, therefore the corresponding Prolog definition is simple:
-\begin{lstlisting}[language=Prolog]
-relStoA(cS_2(VxF), cA_1(VxF, cR_2(''))).
-\end{lstlisting}
-In Prolog relations always start with a lowercase letter, variables always start with an uppercase one. The algorithm denotes relations between types $S$ and $T$ like \lstinline[language=Prolog]{relStoT}, constructors (=rule names) like \lstinline[language=Prolog]{cNT_Name} and variables like \lstinline[language=Prolog]{VinflowTYPE}. Strings in Prolog are delimited by single quotes.\\\\
-
-{\bfseries Type error between variables}\\
-Pattern synonym:
-\begin{lstlisting}[language=transformer]
- (x :: S) = R_1 "+" (x :: A)
-\end{lstlisting}
-As you can see, the variable \verb|x| is not of the same type on the left and right hand side. We therefore have to tell Prolog, that it should try to relate between them by adding a constraint on this variable:
-\begin{lstlisting}[language=Prolog]
-relStoR(VxS, cR_1('+', VxA)) :-
-  relStoA(VxS, VxA).
-\end{lstlisting}
-
-{\bfseries Type error because of missing constructor}\\%how to name this?
-Pattern synonym:
-\begin{lstlisting}[language=transformer]
-  S_1 (A_1 (x :: F) (y :: R)) "+" (z :: F) 
-= A_1 (x :: F) (S_1 (y :: S) "+" (z :: F))
-\end{lstlisting}
-In this pattern synonym the constructor for $A_1$ occurs on the left hand side, even though $A$ is a nonterminal of the right hand side's grammar. We therefore have to translate the content of the first leaf of $S_1$, which is of type $R$, to the type $A$. The same holds for the right side. Additionally, we encounter a type error on \verb|y|. Both of these resolved yield the following Prolog code:
-\begin{lstlisting}[language=Prolog]
-relStoA(cS_1(RA_1, '+', VzF), cA_1(VxF, RS_1)) :-
-  relStoR(VyS, VyR),
-  relStoA(RA_1, cA_1(VxF, VyR)),
-  relStoR(cS_1(VyS, '+', VzF), RS_1).
-\end{lstlisting}
-
-\subsubsection*{Loading definitions}
-The \lstinline{object PrologInterface} comes with a method \lstinline{transformGrammarWithFile}, which takes a grammar and the path to a file containing a transformer object. It returns the transformed grammar and two methods to convert between the grammars. These methods hold the definitions generated like above and on call load the definitions and translate the trees like below. To load the definitions, the methods write them to a temporary file that is loaded and, after transformation, is unloaded and deleted again.
-
-\subsubsection*{Syntax tree translation}
-Syntax trees relate to Prolog terms quite easily: 
-\begin{easylist}
-& Branches correspond to Compounds with a constructor like \lstinline[language=Prolog]{cNT_Name}. The subbranches correspond to the Compound's content and are translated recursively.
-& LeafStrings correspond to Atoms
-& LeafIntegers and LeafFloats correspond to their respective Prolog equivalents Integer and Float
-\end{easylist}
-After transformation, Prolog returns a Term and a Map from String to Term which resolves variables. The backwards translation is therefore equally easy and contains only a bit of string magic.
-
-\subsection*{Time complexity}
-If you've read the above carefully, you'll notice it says a lot of things like "every subset", you might worry about exponential running time. While this is true, it's not relevant at this stage, since:
-\begin{easylist}
-& Grammars and transformers are relatively small compared to the grammars' syntax trees
-& Grammars are transformed once, then multiple trees are transformed (usually)
-& Prolog is way slower, since it explores all transformation paths with the same diligence as we explore all matches
-\end{easylist}
-So yes, runtime is exponential in the size of the grammar and the size of the transformer blocks, but no, it's not that bad, since there is another part in this which is the bigger performance sink. Some speedup in that area therefore would be nice, either in another aproach than the Prolog one or in some guidelines for Prolog how to explore the relations. However this is not part of this thesis' objective.
-
-\subsection*{Problems}
-In the $.tr$-file, the first line hard-codes the transformed grammar's start symbol. This is unconvenient, but a neccessary evil at this point. We'd like to specify the start symbol depending on the input grammar, specifically when matching and producing rules. However when specifing that the start symbol should be taken from some match of a matcher/producer pair, you won't know from which match in case of multiple matches, in case of no matches you wouldn't know which symbol to take at all, ...\\
-Moreover the matching/producing approach does not define a relationship between the atoms of the input and output grammar, therefore you can't say you'd like to just transform the start symbol like you transformed the rules.\\
-There's multiple solutions I can think of, which all have their drawbacks:
-\begin{easylist}
-\ListProperties(Style2*=\Lightning\,)
-& specify the start symbol in the \verb|.ti|-file instead of the \verb|.tr|-file
-&& while this makes the start symbol independent of the transformation, it only moves the problem but does not solve it. By putting the start symbol in the \verb|.tr|-file at least you can hard code the produced grammar's rules' left hand sides as well.
-& specify the start symbol according to some match, use only the last/first/... match, default to $A$.
-&& This may work in many cases, but it's also difficult to think around and prevents any kind of multitasking when matching/producing.
-& specify no start symbol.
-&& Nope. You wouldn't even be able to define the transformation relation.
-\end{easylist}
 
 \section*{Conclusion}
-Throughout this work we've found that it's not enough to describe how grammar rules change into each other, it's often needed to describe the syntax tree conversions as well.\\
+We tried to come up with a way to describe transformations between (context-free) grammars and generate corresponding syntax-tree transformations. Throughout this work we've found that it's not enough to describe how grammar rules change into each other, it's often needed to describe the syntax tree conversions as well.\\
 In some simple cases, describing the information flow may be enough, in other cases pattern synonyms can be enough to express the transformations. It's not clear at this point if there is a need to extend the way of describing the syntax tree conversion further, for example by writing prototype Prolog code.
+%TODO: more
+
+\section*{Related Works}
+!!TODO!!
 
 \section*{Sources}
 \url{http://en.wikipedia.org/wiki/Formal_grammar}

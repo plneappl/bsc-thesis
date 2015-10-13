@@ -45,9 +45,7 @@
   string=[b]",
 }
 
-
 \begin{document}
-
 \lstset{
     breaklines=true,%
     keywordstyle=[0]{\bfseries\color{darkblue}},%
@@ -65,7 +63,7 @@
 }
 
 \section*{Motivation}
-In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, since the trees often recursively give meaning to their word, this is a serious problem.\\
+In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) or similar two-forms \cite{cnfornotcnf} and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, as the trees often recursively give meaning to their word, this is a serious problem.\\
 Also often you'd like to have a grammar employing many features while dealing with a more simple syntax tree after parsing; for example you might like to enable both of these types of variable declarations while only dealing with one of them in your syntax tree:
 \begin{verbatim}
 int (a, b) = (0, 1);
@@ -182,7 +180,7 @@ The corresponding abstract syntax tree of "$1+2*3$" with $*$ having precedence o
   +
   [ .A_3 [ .F_6 2 ] * [ .F_6 3 ] ]
 ]\\
-The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree, therefore the grammar is ambiguous. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
+The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
 We want all nodes to have the same type, $A$ (for ``abstract''). We'd like to eliminate chains of just $A$s as well.
 \subsection*{Grammar transformation}
 To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. We'll first go through the thougt process of creating those patterns and some other declarations, and later put them together into a complete object.\\
@@ -198,7 +196,8 @@ Y -> Y_1 Z x Y | Y_2 Z
 \end{lstlisting}
 When matching the first two rules, we'll get the following mapping of MatcherAtoms to GrammarAtoms:
 $$Y\to S, ~Z\to C, ~x\to "+"$$
-while matching the second two rules, we'll get an equivalent mapping.\\
+while matching the second two rules, we'll get a similar mapping: 
+$$Y\to F, ~Z\to S, ~x\to "*"$$
 Since we want to always get the same symbol, we'll first have to map a NonterminalMatcher to it, which is done using the following declaration:
 \begin{lstlisting}
 W = A
@@ -246,7 +245,7 @@ Let's go through it part by part:
 \begin{itemize}
 \item[Line 1:\hspace{0.5em}] 
 The first line specifies the starting symbol for the produced grammar, so the produced grammar will have the nonterminal \lstinline[language=transformer]{A} as it's starting symbol.  
-\item[{\parbox[t]{\widthof{Lines 2}+0.5em}{Lines 2\\and 21:\vspace{-5em}}}] 
+\item[Lines 2 and 21:\hspace{0.5em}] 
 \lstinline[language=transformer]{begin...end} specifies the begining and and end of a block. A block is applied exhaustively to the input grammar, matching grammar rules and producing new ones. All definitions/bindings/... of a block are scoped and can be overriden by subblocks.
 \item[Line 3:\hspace{0.5em}] 
 Here's the assignment \lstinline[language=transformer]{W = A}. In detail it means: assign the \lstinline[language=scala]{NonterminalMatcher} \lstinline[language=transformer]{W} the nonterminal \lstinline[language=transformer]{A}. This is a constant ``A'' and not one resolved by matching etc.
@@ -263,14 +262,12 @@ takes the matched nonterminal from the first step and replaces the nonterminal r
 For example, if \lstinline[language=transformer]{W} matched \lstinline[language=grammar]{Abs} and \lstinline[language=transformer]{C_1} matched \lstinline[language=grammar]{Con_sum}, 
 \lstinline[language=transformer]{W_1} will be bound to \lstinline[language=grammar]{Abs_sum}. \\
 It's not needed in our example, since the program tries to guess what name to give unknown rules, but if you want to be sure of the mapped name you can use this function to transfer names to new rules.
-\item[{\parbox[t]{\widthof{Lines 6}+0.5em}{Lines 6\\to 11:\vspace{-5em}}}] 
+\item[Lines 6-11:\hspace{0.5em}] 
 \lstinline[language=transformer]{in ... out/seq (... pattern (auto) (force))} is a block of matchers, producers, and patterns.
-\begin{itemize}
-\item[{\parbox[t]{\widthof{Lines 15}+0.5em}{Lines 15\\and 17:\vspace{-5em}}}] 
+\item[Lines 15 and 17:\hspace{0.5em}] 
 Here's our matchers and producers. They will match a grammar rule of the same length, atom by atom. 
 \item[Line 11:\hspace{0.5em}] 
 patterns are used to specify complex transformations. This will be discussed in detail later.
-\end{itemize}
 \end{itemize}
 
 In general, the file is defined as follows:\\
@@ -282,9 +279,10 @@ where again
   & \lstinline{TypeVariable} is any alphanumeric sequence beginning with an uppercase letter
   & \lstinline{RuleName} is the same type variable followed by an underscore and a unique name. Both can be of arbitrary length but must not contain whitespace. Since the type variable is a nonterminal, it must start with an uppercase letter.
   & \lstinline{MatcherAtoms} are one or more 
-  && \lstinline{NonterminalMatcher} (like nonterminals)
-  && \lstinline{AnyMatcher}, a underscore followed by a nonterminal-like
-  && \lstinline{TerminalMatcher}, any string enclosed by double quotation marks, or a special numeric terminal for convenience: \lstinline[language=transformer]{<int>} or \lstinline[language=transformer]{<float>}.
+  && \lstinline{NonterminalMatchers}, an uper-case letter followed by any alphanumeric (e.g. \lstinline[language=transformer]{A, Ka, Ze1Z} like nonterminals). They match nonterminals.
+  && \lstinline{AnyMatchers}, an underscore followed by a nonterminal-like (e.g. \lstinline[language=transformer]{_A, _Ka, _Ze1Z}). They match any grammar atom.
+  && \lstinline{TerminalMatchers}, like NonterminalMatchers, only starting with a lower-case letter (e.g. \lstinline[language=transformer]{a, kA, ze1Z}). They match any terminal.
+  && \lstinline{LiteralMatchers}, any string enclosed by double quotation marks, or a special numeric terminal for convenience: \lstinline[language=transformer]{<int>} or \lstinline[language=transformer]{<float>}. They match only their exact grammar counter-parts.
 \end{easylist}
 \lstset{language=transformer}
 To define a matcher/producer-pair, we enclose it with \lstinline{begin} and \lstinline{end} and prefix the matchers with \lstinline{in}, the producers with \lstinline{out}.\\
@@ -686,7 +684,7 @@ relT1toT2(cA_1(Vc1, Vc2, ...), cA_2(...)) :-
   relS1toS2(...),
   ...
 \end{lstlisting}
-We'll go through the process of translation for three synonyms to show different type errors.\\\\
+We'll go through the process of translation for three synonyms to show different type errors. Type errors tell us when Prolog needs to descend into a relation.\\\\
 {\bfseries Straight translation}\\
 Pattern synonym:
 \begin{lstlisting}[language=transformer]
@@ -972,7 +970,7 @@ S -> S_2 "if " E " then " S " else " S
    | S_t <int>
 E -> E_T "1" | E_F "0"
 \end{lstlisting}
-We would like to get some kind of grammar like this:
+We would like to get some kind of grammar like this, an equivalent grammar in Chomsky-two-form:
 \begin{lstlisting}[language=grammar]
 start S
 S -> S_2 S1 S 
@@ -1108,6 +1106,7 @@ Transformed backwards:\\
       3 ] ] ]
 
 \subsection*{Left-factoring}
+In this case study we want to factor out some parts of a grammar rule, so that different rules with the same nonterminal on the left hand side only contain up to one common atom on the right hand side.
 \subsubsection*{Grammar}
 \begin{lstlisting}[language=grammar]
 start S
@@ -1207,6 +1206,7 @@ Transformed backwards:\\
 
 
 \subsection*{Inlining}
+This case study is effectively the reverse transformation of the last case study: We want to inline some rule to eliminate a nonterminal from the grammar.
 \subsubsection*{Grammar} 
 \begin{lstlisting}[language=grammar]
 start A
@@ -1313,9 +1313,77 @@ We tried to come up with a way to describe transformations between (context-free
 In some simple cases, describing the information flow may be enough, in other cases pattern synonyms can be enough to express the transformations. It's not clear at this point if there is a need to extend the way of describing the syntax tree conversion further, for example by writing prototype Prolog code.
 %TODO: more
 
-\section*{Related Works}
-!!TODO!!
+\section*{Related works}
+\subsection*{Generating attribute grammar-based bidirectional transformations from rewrite rules\cite{bidirsyn}}
+This work describes a process to generate bidirectional syntax tree transformations from attribute grammar rewrite rules. These rewrite rules are similar to our pattern synonyms, although directed (i.e. always from left to right) but not easily invertible and more constrained in the following ways:
+\lstset{language=transformer}\begin{easylist}[itemize]
+& The left hand side has to be unique disregarding values of parameters, i.e. the following corresponding pattern synonyms would all be considered illegal duplicates of one another:
+&& \lstinline{A_1 x = ...}
+&& \lstinline{A_1 y = ...}
+&& \lstinline{A_1 (A_2 x) = ...}
+\ListProperties(Style1*=\phantom{$\bullet$}~)
+& These restrictions are placed to make the transformation a function, with some workaround to the last case appearing together with one of the first two introduced later.
+\ListProperties(Style1*=$\bullet$~)
+& Recursion into the left hand side is not possible, making left-recusion elimination impossible, since you need an infinitely finite level of recursion to get to the left-/right-most child.
+\end{easylist} 
+Our work doesn't try to generate functions as transformations but instead generates relations, therefore allowing more than one transformation result and allowing overlapping patterns.\\
+The paper also doesn't cover grammar transformations.
 
-\section*{Sources}
+\subsection*{XSLT}
+XSLT (XSL Transformations) are a way to describe how to transform XML-files (eXtensible Markup Language) to some other document \cite{xslt1}. To describe how to transform a XML, you have access to 
+\begin{easylist}[itemize]
+& searching for a tree node by it's type/node name, or some pattern matching it or it's relative or absolute position in the tree
+& looping through children
+& state, as in variables
+& conditional statements
+\end{easylist}
+Using these, you can extract information from the XML-nodes and put them into any target non-/structure.\\
+Since every syntax tree can be transformed to some XML quite easily, this can be seen as an approach to modifying parser results, without 
+\begin{easylist}
+& grammar transformation
+& backwards transformation
+& (easy) reuse of transformations for different grammars
+\end{easylist}
+It therefore doesn't solve left-recursion elimination for recursive descent parsing (it can however describe how to reverse the transformation). XSLT support is implemented in all major browsers \cite{xslt2}.
+%TODO: more
+
+\subsection*{biXid: a bidirectional transformation language for XML\cite{xmlbt}}
+This work explores bidirectional XML transformations using relations and XML-tree walking. It describes relations in a similar way to our Prolog definitions. The following example transforms a Netscape bookmark to an XBEL bookmark:
+\begin{verbatim}
+relation top =                                 
+  html[head[String],                           
+    body[h1[var t as String], dl[var nc]]]     
+<->                                            
+  xbel[title[var t as String], var xc]         
+where                                          
+  contents(nc, xc)                             
+\end{verbatim}
+The corresponding Prolog definition would be:
+\begin{lstlisting}[language=Prolog]
+relHTMLtoXBELtop(
+  chtml_1(chead_1(V1S), cbody_1(ch1_1(VtS), cdl_1(Vnc))), 
+  cxbel_1(ctitle_1(VtS), Vxc)
+) :- relHTMLtoXBELcontents(Vnc, Vxc).
+\end{lstlisting}
+However they place some restrictions on the relations which forbid many transformations to transform the XML using two regular automata, no OR in the where-clause is the most significant one. Rotating a tree is not possible, since that needs that exact recursion method, and so transforming between left- and right-recursive trees is impossible, the hardest transformation we looked at.\\
+Also, transforming grammars is not covered.
+
+\begin{thebibliography}{9}
+\bibitem{cnfornotcnf}
+  Martin Lange, Hans Leiß, \emph{To CNF or not to CNF? An Efficient Yet Presentable Version of the CYK Algorithm}, 2009.
+
+\bibitem{bidirsyn}
+  Martins, Saraiva, Fernandes, Wyk., \emph{Generating attribute grammar-based bidirectional transformations from rewrite rules}, 2014.
+
+\bibitem{xslt1}
+  Michael Kay, Saxonica, W3C, \emph{XSL Transformations (XSLT) Version 2.0}, 2007. \url{http://www.w3.org/TR/xslt20/}
+
+\bibitem{xslt2}
+  w3schools, \emph{XSLT Introduction}, 2015. \url{http://www.w3schools.com/xsl/xsl_intro.asp}
+
+\bibitem{xmlbt}
+  Kawanaka, Shinya, and Haruo Hosoya, \emph{biXid: a bidirectional transformation language for XML}, ACM SIGPLAN Notices. Vol. 41. No. 9. ACM, 2006.
+
+\end{thebibliography}
 \url{http://en.wikipedia.org/wiki/Formal_grammar}
 \end{document}

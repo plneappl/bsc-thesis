@@ -154,7 +154,7 @@ object Transform {
       )
     }).toSet.toList
     //println(swaps)
-    (us, outRules, patternSynonyms.toList, outDefs ++ swaps)
+    (us, outRules, patternSynonyms.toList, outDefs)// ++ swaps)
   }
   
   //looks for a grammarRule by it's ruleName (for example S_1).

@@ -18,5 +18,6 @@ unmanagedJars in Compile <++= baseDirectory map { base =>
 
 fork := true
 connectInput in run := true
+outputStrategy        :=   Some(StdoutOutput) // Get rid of output prefix
 scalacOptions ++= Seq("-unchecked", "-deprecation")
 

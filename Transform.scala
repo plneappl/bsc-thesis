@@ -100,7 +100,6 @@ object Transform {
 
     val nonterminals: List[Nonterminal] = (to.rules.map(_.lhs) ++ to.rules.map(_.rhs.filter(x => x.isInstanceOf[Nonterminal]).map(x => x.asInstanceOf[Nonterminal])).flatten).toSet.toList
 
-    //todo: for(ntm <- loopntdecls; nt <- nonterminals) {st2 = st + (ntm, nt); more( ..., st2, ...) ... }
     val retList = lists(loopNTDecls.length)(nonterminals).map(nts => {
       val more = block.more.map(b => {
         val st2 = st ++ (loopNTDecls zip nts)
@@ -226,7 +225,8 @@ object Transform {
     if(flip) "rel" + t2 + "to" + t1
     else "rel" + t1 + "to" + t2
     
-  
+  def varName(vOrR: String, ident: String, flip: Boolean, force: Boolean) = new Variable(vOrR + ident + (if(!flip && force) "_left" else if(force) "_right" else ""))
+
   def typedPatternToTerm(tp: TypedPattern, otherVars: Set[RuleName], nt: RuleNameTable, myR: GrammarRules, r: GrammarRules, flip: Boolean, force: Boolean): (Term, Set[Term]) = {
   
     //EXTRACTOR_PATTERN SPECIAL CASE!
@@ -235,7 +235,7 @@ object Transform {
     //therefore it's something like x :: T and can be translated into relTto...(VxT, ...)
     if(tp.isInstanceOf[ExtractorPattern]){
       val ep = tp.asInstanceOf[ExtractorPattern]
-      return (ep.toTerm, Set())
+      return (varName("V", ep.id + ep.typ, flip, force), Set())
     }
     
     val myRule = getGrammarRuleByName(tp.ruleName)(myR).get
@@ -245,7 +245,7 @@ object Transform {
           //this is not the constructor of our grammar, therefore we have to relate a new temporary variable with it
           case None => {
             //should the subpattern produce any type errors, it should (NOT $flip) the resulting Compounds' sides, since it's on the other side 
-            val (t, defs) = typedPatternToTerm(tp1, otherVars, nt, r, myR, !flip, force)
+            val (t, defs) = typedPatternToTerm(tp1, otherVars, nt, r, myR, flip, force)
             var compoundContent = Array[Term](new Variable("R" + tp1.ruleName), t)
             if(flip) compoundContent = compoundContent.reverse
             (new Variable("R" + tp1.ruleName), defs + (new Compound(tpRelName(ga.asInstanceOf[Nonterminal], tp1.typ, flip), compoundContent)))
@@ -260,13 +260,13 @@ object Transform {
       case _: PatternAtomPrototype => throw new Exception("Non-allowed code path") 
       case x: hasToTerm => (x.toTerm, Set())
       case tpv@TypedPatternVariable(id, typ, _) => {
-        val myVar = new Variable("V" + id + typ + (if(!flip && force) "_force" else ""))
+        val myVar = varName("V", id + typ, flip, force)
         (
           myVar, {
             //check if our variable is directly found on the other side. Otherwise we get a typeError (more like a resolution error).
             if(otherVars.contains(tpv.ruleName) && (force == false || flip == true)) Set()
-            else if (otherVars.contains(tpv.ruleName) && !flip) {
-              var compoundContent =  Array[Term](myVar, new Variable("V" + id + typ))
+            else if (otherVars.contains(tpv.ruleName) && (force == true)) {
+              var compoundContent =  Array[Term](myVar, varName("V", id + typ, !flip, force))
               Set(new Compound(tpRelName(typ, typ, false), compoundContent))
             }
             //TypeError: introduce a relation between our variable and the other one with the same name
@@ -274,7 +274,7 @@ object Transform {
               val otherVar = otherVars.find(rn => rn.name == id)
               otherVar match {
                 case Some(otherVar1) => {
-                  var compoundContent = Array[Term](myVar, new Variable("V" + otherVar1.name + otherVar1.typ))
+                  var compoundContent = Array[Term](myVar, varName("V", otherVar1.name + otherVar1.typ, !flip, force))
                   if(flip) compoundContent = compoundContent.reverse
                   Set(new Compound(tpRelName(typ, otherVar1.typ, flip), compoundContent))
                 }
@@ -532,7 +532,7 @@ object Transform {
   def newName(state: TransformerState, lhs: RuleName, a1: String): TransformerState = {
     var ntTarget = Nonterminal(a1 + GLOBALCOUNTER)
     GLOBALCOUNTER += 1
-    println("!!!!!")
+    //println("!!!!!")
     val stValues = state._2.values.toList
     while(stValues.contains(ntTarget) || state._1.contains(ntTarget)){
       ntTarget = Nonterminal(nextLexicographic(ntTarget.toString))
@@ -778,11 +778,11 @@ object Transform {
     override def getTypedVars = patternContent.map(_.getTypedVars).flatten
   }
   
-  class ExtractorPattern(epid: String, typ: Nonterminal) extends TypedPattern("KW_EXTRACTOR", List(), typ) with hasToTerm {
+  class ExtractorPattern(epid: String, typ: Nonterminal) extends TypedPattern("KW_EXTRACTOR", List(), typ) {
     override def getTypedVars = List(RuleName(typ, id))
     override def toString = "(" + id + " :: " + typ + ")"
     override def id = epid
-    def toTerm = new Variable("V" + id + typ)
+    
   }
   object ExtractorPattern{
     def apply(id: String, typ: Nonterminal) = new ExtractorPattern(id, typ)

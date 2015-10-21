@@ -1,5 +1,7 @@
 \documentclass[a4paper]{article}
 
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
 \usepackage{hyperref}
 \usepackage{amsmath}
 \usepackage{amsfonts}
@@ -62,7 +64,19 @@
     %emph=[2]{word1,word2}, emphstyle=[2]{style},    
 }
 
-\section*{Motivation}
+
+\begin{titlepage}
+{\Huge\bfseries Bachelor Thesis\\\\Bidirectional Grammar\\Transformations\par}
+\vspace{1.5cm}
+{\Large Simon Wegendt}\\\\Supervisors:\\Yufei Cai\\Prof. Dr. Klaus Ostermann
+\\\\
+\today\par
+\end{titlepage}
+\pagebreak
+\tableofcontents
+\pagebreak
+\section{Introduction}
+\subsection{Motivation}
 In many languages it's easy to write a certain kind of parser while others may be less intuitive: In functional languages writing a recursive descent parser is easy while designing a bottom-up parser is more complex all around. A recursive descent parser can't handle left-recursive grammars though. The CYK-parsing algorithm only works on grammars in CNF (chomsky normal form) or similar two-forms \cite{cnfornotcnf} and, while every context-free grammar can be transformed to a CNF-grammar which produces the same words, the syntax tree produced by parsing the words differs a lot from the ones of the original grammar. Since syntax trees are often more important than the actual words, as the trees often recursively give meaning to their word, this is a serious problem.\\
 Also often you'd like to have a grammar employing many features while dealing with a more simple syntax tree after parsing; for example you might like to enable both of these types of variable declarations while only dealing with one of them in your syntax tree:
 \begin{verbatim}
@@ -71,9 +85,18 @@ int c = 0, d = 1;
 \end{verbatim}
 Moreover, many textbooks describe grammar transformations like CNF or left recursion elimination. Implementing these is somewhat complicated and it would be nice to be able to reuse some kind of standard definition for them, also the resulting syntax tree of the starting and the transformed grammar will differ. Therefore finding a more concise, correct way to describe grammar transformations would be nice.\\
 For all of these problems we'll try to find a solution.
+\subsection{Goal}
+The Goal of this thesis is to
+\begin{itemize}
+\item describe transformations between context free grammars using a DSL ("Domain-specific language")
+\item apply such transformations
+\item describe or infer forwards and backwards transformations between the corresponding syntax trees
+\end{itemize}
+In this thesis, the transformation between grammars is done using a pattern matching approach matching single grammar rules exhaustively, building a table holding the match information, and constructing rules using the same patterns. Syntax tree transformations can be inferred in some cases, while in others they have to be written done more or less explicitly (although still prototyped, so they will be instantiated on a per-grammar base).
 
-\section*{Grammars}
-\subsubsection*{Theory}
+\section{Background information on grammars}
+This section will briefly establish a common ground on what grammars etc. are.
+\subsection{Theory}
 A grammar $G$ is a tuple 
 $$ G = \tuple{N, \Sigma, P, S} $$
 where \begin{itemize}
@@ -84,12 +107,12 @@ $$ (\Sigma\cup N)^*N(\Sigma\cup N)^*\to (\Sigma\cup N)^* $$
 \item[$S\in N$] is the \textit{start symbol} of the grammar 
 \end{itemize}
 
-\subsubsection*{Kleene-operator}
+\subsection{Kleene-operator}
 Given a set $M$, $M^*$ is defined as all concatenations of any number (even none) of all elements of $M$. A more formal definition of this could be 
 $$M^* = \bigcup_{n=0}^{\infty}M^n$$
 In language terms, these tuples are often written without the syntactical sugar, for example to represent a number like $1523$ over the alphabet $\Sigma=\set{0,1,2,3,4,5,6,7,8,9}$, you could use the tuple $\tuple{1,5,2,3}\in\Sigma^4\subseteq\Sigma^*$. Since the tuple representation is not very readable, we'll write $1523$ in most cases instead. The empty tuple is often written as $\epsilon$ or $\lambda$.
 
-\subsubsection*{Languages}
+\subsection{Languages}
 A \textit{language} is a subset of all words over an alphabet $\Sigma$. \\
 Examples: $ \Sigma = \set{0,1,2,3,4,5,6,7,8,9} $
 \begin{itemize}
@@ -97,19 +120,19 @@ Examples: $ \Sigma = \set{0,1,2,3,4,5,6,7,8,9} $
 \item[-] The set of all binary coded numbers is a subset of $\Sigma^*$
 \end{itemize}
 
-\subsubsection*{Languages produced from grammars}
+\subsubsection{Languages produced from grammars}
 Grammars can be used to define a language. Given a grammar $G = \tuple{N, \Sigma, P, S}$, the set of all it's words $L(G)$ can be described as all words $w$ in $\Sigma^*$ where a sequence of derivations exists, such that $S\implies_G^* w$. 
 
-\subsubsection*{Syntax trees}
+\subsection{Syntax trees}
 Syntax trees describe how words are formed from grammars. The parent node always contains the left hand side of a production rule, it's children nodes joined together are the corresponding right hand side.\\
 The root node is the start symbol, the leafs form the produced word.
 
-\subsubsection*{Context free grammars}
+\subsection{Context free grammars}
 Context free grammars are grammars with production rules being limited to only one symbol on the left hand side, therefore every rule has to look like 
 $$N \to (\Sigma\cup N)^* $$
 Context free grammars are much easier handled than those without this limitation, while still being powerful enough to describe the majority of a programming language and most other needed stuff like braced terms etc.
 
-\subsection*{.grammar-file specification}
+\subsubsection{.grammar-file specification}
 To specify grammars for our program we use custom, simple \verb|.grammar|-files. Here's an example to start:
 \begin{lstlisting}[language=grammar]
 start C
@@ -141,16 +164,8 @@ You may freely use whitespace in most places, this includes linebreaks before \v
 Both the sets $N$ and $\Sigma$ are defined implicitly.
 
 
-\section*{Goal}
-The Goal of this thesis is to
-\begin{itemize}
-\item describe transformations between context free grammars using a DSL ("Domain-specific language")
-\item apply such transformations
-\item generate forwards and backwards transformations between the corresponding syntax trees
-\end{itemize}
-
-\section*{The DSL}
-We'll first look at how to come up with the matchers and producers, and later look at transforming the syntax trees belonging to the grammars. For this, we'll we'll look at the \verb|concrete.grammar| and it's syntax tree:
+\section{The DSL}
+This section will describe how to specify transformations on grammars and syntax trees. We'll first look at how to come up with the patterns for matching and producing grammar rules, and later look at transforming the syntax trees belonging to the grammars. For this, we'll we'll look at the \verb|concrete.grammar| and it's syntax trees:
 \begin{lstlisting}[language=grammar]
 start C
 C -> C_1 S "+" C | C_2 S
@@ -182,7 +197,7 @@ The corresponding abstract syntax tree of "$1+2*3$" with $*$ having precedence o
 ]\\
 The abstract grammar, which only loosely describes how arithmetic expressions are formed, does not define a precedence: it's represented by the tree. The concrete grammar is non-ambiguous though: it defines a precedence and allows braces to break it. Transforming the tree forwards and backwards not only keeps this precedence, it eliminates (or adds) unneeded braces. All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. The forward transformation only produces one tree.\\
 We want all nodes to have the same type, $A$ (for ``abstract''). We'd like to eliminate chains of just $A$s as well.
-\subsection*{Grammar transformation}
+\subsection{Grammar transformation}
 To describe grammar transformations we're using a pattern matching approach. This means that the DSL describes input patterns to match on rules and output patterns to produce new rules. We'll first go through the thougt process of creating those patterns and some other declarations, and later put them together into a complete object.\\
 To match the all rules 
 \begin{lstlisting}[language=grammar]
@@ -296,7 +311,7 @@ At the start of a \lstinline{begin}-block you can declare some things:
 \end{easylist}
 
 
-\subsection*{Syntax tree transformation}
+\subsection{Syntax tree transformation}
 To describe how to transform syntax trees we use pattern synonyms. Pattern synonyms describe how (sub-)trees relate to each other. Again we use the concrete and abstract grammar as an example. The pattern synonyms for transforming between them would look like this (with the concrete grammar on the left side and the abstract grammar on the right):
 \begin{lstlisting}[language=transformer]
   C_1 x p y = A_1 x p y
@@ -405,165 +420,167 @@ begin
   end  
 end
 \end{lstlisting}
-\subsubsection*{Sample transformation}
+\subsubsection{Sample transformation}
 Let's look at an actual conversion. We parse \verb|2*[4+[3+[22*[11+[2*[3+4]]]]]]| using the concrete grammar and get:\\
-\tikzset{level distance=25pt}
-\Tree [ .C_2
-  [ .S_3
-    [ .F_6
-      2 ] 
-    *
-    [ .S_4
-      [ .F_5
-        (
-        [ .C_1
-          [ .S_4
-            [ .F_6
-              4 ]  ] 
-          +
-          [ .C_2
-            [ .S_4
-              [ .F_5
-                (
-                [ .C_1
-                  [ .S_4
-                    [ .F_6
-                      3 ]  ] 
-                  +
-                  [ .C_2
-                    [ .S_4
-                      [ .F_5
-                        (
-                        [ .C_2
-                          [ .S_3
-                            [ .F_6
-                              22 ] 
-                            *
-                            [ .S_4
-                              [ .F_5
-                                (
-                                [ .C_1
-                                  [ .S_4
-                                    [ .F_6
-                                      11 ]  ] 
-                                  +
-                                  [ .C_2
-                                    [ .S_4
-                                      [ .F_5
-                                        (
-                                        [ .C_2
-                                          [ .S_3
-                                            [ .F_6
-                                              2 ] 
-                                            *
-                                            [ .S_4
-                                              [ .F_5
-                                                (
-                                                [ .C_1
-                                                  [ .S_4
-                                                    [ .F_6
-                                                      3 ]  ] 
-                                                  +
-                                                  [ .C_2
-                                                    [ .S_4
-                                                      [ .F_6
-                                                        4 ]  ]  ]  ] 
-                                                ) ]  ]  ]  ] 
-                                        ) ]  ]  ]  ] 
-                                ) ]  ]  ]  ] 
-                        ) ]  ]  ]  ] 
-                ) ]  ]  ]  ] 
-        ) ]  ]  ]  ] \\
+\begin{tikzpicture}[level distance=20pt,every tree node/.style={font=\tiny,anchor=base}]
+\Tree [ .$C_2$
+  [ .$S_3$
+    [ .$F_6$
+      2 ]
+    '*'
+    [ .$S_4$
+      [ .$F_5$
+        '['
+        [ .$C_1$
+          [ .$S_4$
+            [ .$F_6$
+              4 ] ]
+          '+'
+          [ .$C_2$
+            [ .$S_4$
+              [ .$F_5$
+                '['
+                [ .$C_1$
+                  [ .$S_4$
+                    [ .$F_6$
+                      3 ] ]
+                  '+'
+                  [ .$C_2$
+                    [ .$S_4$
+                      [ .$F_5$
+                        '['
+                        [ .$C_2$
+                          [ .$S_3$
+                            [ .$F_6$
+                              22 ]
+                            '*'
+                            [ .$S_4$
+                              [ .$F_5$
+                                '['
+                                [ .$C_1$
+                                  [ .$S_4$
+                                    [ .$F_6$
+                                      11 ] ]
+                                  '+'
+                                  [ .$C_2$
+                                    [ .$S_4$
+                                      [ .$F_5$
+                                        '['
+                                        [ .$C_2$
+                                          [ .$S_3$
+                                            [ .$F_6$
+                                              2 ]
+                                            '*'
+                                            [ .$S_4$
+                                              [ .$F_5$
+                                                '['
+                                                [ .$C_1$
+                                                  [ .$S_4$
+                                                    [ .$F_6$
+                                                      3 ] ]
+                                                  '+'
+                                                  [ .$C_2$
+                                                    [ .$S_4$
+                                                      [ .$F_6$
+                                                        4 ] ] ] ]
+                                                ']' ] ] ] ]
+                                        ']' ] ] ] ]
+                                ']' ] ] ] ]
+                        ']' ] ] ] ]
+                ']' ] ] ] ]
+        ']' ] ] ] ]
+
+\end{tikzpicture}
 
 After the automatic transformation we get the following syntax tree belonging to the abstract grammar: \\
-\Tree [ .A_3
-  [ .A_6
+\Tree [ .$A_3$
+  [ .$A_6$
     2 ]
-  *
-  [ .A_1
-    [ .A_6
+  '*'
+  [ .$A_1$
+    [ .$A_6$
       4 ]
-    +
-    [ .A_1
-      [ .A_6
+    '+'
+    [ .$A_1$
+      [ .$A_6$
         3 ]
-      +
-      [ .A_3
-        [ .A_6
+      '+'
+      [ .$A_3$
+        [ .$A_6$
           22 ]
-        *
-        [ .A_1
-          [ .A_6
+        '*'
+        [ .$A_1$
+          [ .$A_6$
             11 ]
-          +
-          [ .A_3
-            [ .A_6
+          '+'
+          [ .$A_3$
+            [ .$A_6$
               2 ]
-            *
-            [ .A_1
-              [ .A_6
+            '*'
+            [ .$A_1$
+              [ .$A_6$
                 3 ]
-              +
-              [ .A_6
-                4 ] ] ] ] ] ] ] ]\\
+              '+'
+              [ .$A_6$
+                4 ] ] ] ] ] ] ] ]
 
-A backwards transformation is also possible. We get the following tree:\\
-\Tree [ .C_2
-  [ .S_3
-    [ .F_6
+A backwards transformation is also possible and generated. We get the following tree:\\
+\Tree [ .$C_2$
+  [ .$S_3$
+    [ .$F_6$
       2 ]
-    *
-    [ .S_4
-      [ .F_5
-        (
-        [ .C_1
-          [ .S_4
-            [ .F_6
+    '*'
+    [ .$S_4$
+      [ .$F_5$
+        '['
+        [ .$C_1$
+          [ .$S_4$
+            [ .$F_6$
               4 ] ]
-          +
-          [ .C_1
-            [ .S_4
-              [ .F_6
+          '+'
+          [ .$C_1$
+            [ .$S_4$
+              [ .$F_6$
                 3 ] ]
-            +
-            [ .C_2
-              [ .S_3
-                [ .F_6
+            '+'
+            [ .$C_2$
+              [ .$S_3$
+                [ .$F_6$
                   22 ]
-                *
-                [ .S_4
-                  [ .F_5
-                    (
-                    [ .C_1
-                      [ .S_4
-                        [ .F_6
+                '*'
+                [ .$S_4$
+                  [ .$F_5$
+                    '['
+                    [ .$C_1$
+                      [ .$S_4$
+                        [ .$F_6$
                           11 ] ]
-                      +
-                      [ .C_2
-                        [ .S_3
-                          [ .F_6
+                      '+'
+                      [ .$C_2$
+                        [ .$S_3$
+                          [ .$F_6$
                             2 ]
-                          *
-                          [ .S_4
-                            [ .F_5
-                              (
-                              [ .C_1
-                                [ .S_4
-                                  [ .F_6
+                          '*'
+                          [ .$S_4$
+                            [ .$F_5$
+                              '['
+                              [ .$C_1$
+                                [ .$S_4$
+                                  [ .$F_6$
                                     3 ] ]
-                                +
-                                [ .C_2
-                                  [ .S_4
-                                    [ .F_6
+                                '+'
+                                [ .$C_2$
+                                  [ .$S_4$
+                                    [ .$F_6$
                                       4 ] ] ] ]
-                              ) ] ] ] ] ]
-                    ) ] ] ] ] ] ]
-        ) ] ] ] ]\\
+                              ']' ] ] ] ] ]
+                    ']' ] ] ] ] ] ]
+        ']' ] ] ] ]
 
 The abstract grammar is ambiguous while the concrete grammar is non-ambiguous. Transforming the tree forwards and backwards keeps the precedence of the concrete grammar and it eliminates (or adds) unneeded braces. Obviously there's infinitely many possible ways to insert braces in the tree and All versions of valid backtransformed trees are obtainable; for convenience the least deep, shortest unparsed is choosen for printing. In our case this means that tranforming forwards and backwards eliminates unnecessary braces. The forward transformation only produces one tree (in this case study).
 
 
-\subsection*{Transformer-instructions file}
+\subsection{Transformer-instructions file}
 To easily use the program, there is the so-called transformer-instructions file. With it, you can specify
 \begin{easylist}[itemize]
 & what grammar to load using \verb|"FileName.grammar"|. This has to be the first instruction of the file.
@@ -574,9 +591,10 @@ To easily use the program, there is the so-called transformer-instructions file.
 You can chain these commands to save intermediate results or apply multiple transformations. Applying two transformations after another chains them, so the resulting grammar will be
 $$g_1 \to t_2(t_1(g_1))$$
 
-\section*{Inner workings}
+\section{Inner workings}
+In this section I'll discuss how the algorithm implemented executes transformations.
 \lstset{language=scala}
-\subsection*{.tr to syntax tree transformations}
+\subsection{.tr to syntax tree transformations}
 The transformation process consists of the following steps:
 \begin{easylist}[enumerate]
 & Matching grammar rules:
@@ -591,7 +609,7 @@ The transformation process consists of the following steps:
 & Translate pattern-synonyms to Prolog-definitions
 \end{easylist}
 
-\subsection*{Different atomic and composite types}
+\subsection{Different atomic and composite types}
 %uninteresting?
 \begin{easylist}[itemize]
  & \lstinline{GrammarAtom}s are used to represent the right side of grammar rules. There are the following subatoms:
@@ -613,9 +631,9 @@ The transformation process consists of the following steps:
 \end{easylist}
 
 %already talked about in "inner workings"
-%\subsection*{Tables}
+%\subsection{Tables}
 
-\subsection*{Applying a transformer block}
+\subsection{Applying a transformer block}
 To apply a transformer block, that is a set of in and out rules and pattern synonym prototypes, we have to do the following:
 \begin{easylist}
 & Match every in-rule to a grammar-rule. For this, we select every subset of the same size out of the grammar's rules and try matching rule-by-rule, atom-by-atom. This aproach was choosen since we wouldn't know if the first successful match was the one intended if we'd stop after it.
@@ -630,7 +648,7 @@ It get's called by \lstinline{applyMatcherAndTransformer}, which then
 & translates pattern-synonyms to Prolog definitions
 \end{easylist}
 
-\subsubsection*{Matching rules}
+\subsubsection{Matching rules}
 Matching one grammar rule to a matcher is done in \lstinline{matches}. After putting everything from a grammar rule longer than a matcher inside a rest matcher (if available), it goes through every pair of grammar and matcher atoms and checks the symbol table, if it should continue: 
 \begin{easylist}
 & If the matcher atom is already in the symbol table, continue if the corresponding grammar atom is the same
@@ -639,14 +657,14 @@ Matching one grammar rule to a matcher is done in \lstinline{matches}. After put
 \end{easylist}
 After matching all atoms, it returns the gathered information: the modified symbol table. The symbol table also holds the \lstinline{restMatcher}/\lstinline{GrammarAtomSequence} match.
 
-\subsubsection*{Producing rules}
+\subsubsection{Producing rules}
 Producing a grammar rule is simpler than matching one: Go through all matcher atoms and in most cases the symbol table already tells us everything we need to know or we just need to take literal information out of a matcher. Only when a new nonterminal is introduced we have to be creative. For this, there is a \lstinline{Set} of used symbols, which we check before adding a new nonterminal.
 
-\subsection*{Pattern synonyms}
-\subsubsection*{Instantiating pattern synonym prototypes}
+\subsection{Pattern synonyms}
+\subsubsection{Instantiating pattern synonym prototypes}
 Instantiating the pattern synonyms basically means recursively going through them and replacing all matcher types with the mapped grammar types according to the symbol table. This is done by \lstinline{finalizePattern}.
 
-\subsubsection*{Automatic generation}
+\subsubsection{Automatic generation}
 Patterns can be automatically inferred from information flow, this is handled by \lstinline{producePatternSynonyms}. To do this it basically tries to infer some order of derivation of grammar rules, so that every part of information is present on both sides. Example:
 \begin{lstlisting}[language=transformer]
 in
@@ -667,7 +685,7 @@ C_1 s x c = A_1 s ?
 C_1 s x c = A_1 s (B_2 x)
 \end{lstlisting}
 
-\subsection*{Prolog}
+\subsection{Prolog}
 Prolog handles the syntax tree transformation. To talk to Prolog, there's a supplied interface between Prolog and Java, and since Scala compiles to the JVM, we can use it. However it behaves strangely in some cases, which stops us from getting different transformed trees as a stream and other nice-to-have features. \\
 The transformation is done as follows:
 \begin{easylist}
@@ -677,7 +695,7 @@ The transformation is done as follows:
 & translate the answer(s)
 \end{easylist}
 
-\subsubsection*{Pattern synonyms to Prolog definitions}
+\subsubsection{Pattern synonyms to Prolog definitions}
 Every pattern corresponds to some Prolog definition like
 \begin{lstlisting}[language=Prolog]
 relT1toT2(cA_1(Vc1, Vc2, ...), cA_2(...)) :- 
@@ -721,10 +739,10 @@ relStoA(cS_1(RA_1, '+', VzF), cA_1(VxF, RS_1)) :-
   relStoR(cS_1(VyS, '+', VzF), RS_1).
 \end{lstlisting}
 
-\subsubsection*{Loading definitions}
+\subsubsection{Loading definitions}
 The \lstinline{object PrologInterface} comes with a method \lstinline{transformGrammarWithFile}, which takes a grammar and the path to a file containing a transformer object. It returns the transformed grammar and two methods to convert between the grammars. These methods hold the definitions generated like above and on call load the definitions and translate the trees like below. To load the definitions, the methods write them to a temporary file that is loaded and, after transformation, is unloaded and deleted again.
 
-\subsubsection*{Syntax tree translation}
+\subsubsection{Syntax tree translation}
 Syntax trees relate to Prolog terms quite easily: 
 \begin{easylist}
 & Branches correspond to Compounds with a constructor like \lstinline[language=Prolog]{cNT_Name}. The subbranches correspond to the Compound's content and are translated recursively.
@@ -733,7 +751,8 @@ Syntax trees relate to Prolog terms quite easily:
 \end{easylist}
 After transformation, Prolog returns a Term and a Map from String to Term which resolves variables. The backwards translation is therefore equally easy and contains only a bit of string magic.
 
-\subsection*{Time complexity}
+\section{Discussion}
+\subsection{Time complexity}
 If you've read the above carefully, you'll notice it says a lot of things like "every subset", you might worry about exponential running time. While this is true, it's not relevant at this stage, since:
 \begin{easylist}
 & Grammars and transformers are relatively small compared to the grammars' syntax trees
@@ -742,7 +761,7 @@ If you've read the above carefully, you'll notice it says a lot of things like "
 \end{easylist}
 So yes, runtime is exponential in the size of the grammar and the size of the transformer blocks, but no, it's not that bad, since there is another part in this which is the bigger performance sink. Some speedup in that area therefore would be nice, either in another aproach than the Prolog one or in some guidelines for Prolog how to explore the relations. However this is not part of this thesis' objective.
 
-\subsection*{Problems}
+\subsection{Problems}
 In the $.tr$-file, the first line hard-codes the transformed grammar's start symbol. This is unconvenient, but a neccessary evil at this point. We'd like to specify the start symbol depending on the input grammar, specifically when matching and producing rules. However when specifing that the start symbol should be taken from some match of a matcher/producer pair, you won't know from which match in case of multiple matches, in case of no matches you wouldn't know which symbol to take at all, ...\\
 Moreover the matching/producing approach does not define a relationship between the atoms of the input and output grammar, therefore you can't say you'd like to just transform the start symbol like you transformed the rules.\\
 There's multiple solutions I can think of, which all have their drawbacks:
@@ -757,9 +776,10 @@ There's multiple solutions I can think of, which all have their drawbacks:
 \end{easylist}
 
 
-\section*{Case studies}
-\subsection*{Eliminating left-recursion}
-\subsubsection*{Grammar}
+\section{Case studies}
+In this section we'll look at some example transformations to show the potential and limitations of the current algorithm.
+\subsection{Eliminating left-recursion}
+\subsubsection{Grammar}
 \begin{lstlisting}[language=grammar]
 start S
 S -> S_1  S "+" F  | S_2 F
@@ -807,7 +827,7 @@ begin
     out
       S1 -> S1_1 F R
       R  -> R_2 "" | R_1 t S1  
-    pattern
+    pattern 
       S_2 x = S1_1 x (R_2 "")
       S_1 (S_2 x) t y  = S1_1 x (S_2 y)
       S_1 (S1_1 x y) t z = S1_1 x (S_1 y t z)
@@ -832,7 +852,7 @@ begin
   end
 end
 \end{lstlisting}
-\subsubsection*{Transformed grammar}
+\subsubsection{Transformed grammar}
 \begin{lstlisting}[language=grammar]
 start A
 F -> F_3 "[" A "]"
@@ -870,91 +890,76 @@ The following two patterns are autogenerated copy patterns.\\
 \verb|(F_3 (1 :: "[") (2 :: S) (3 :: "]")) = (F_3 (1 :: "[") (2 :: A) (3 :: "]"))|\\
 \verb|(F_4 (1 :: <int>)) = (F_4 (1 :: <int>))|
 
-\subsubsection*{Sample transformation}
-We start by parsing $11+[2+3]+4$ with the resulting grammar:\\
-\Tree [ .A_1
-  [ .F_4
-    11 ]
-  [ .R_1
-    +
-    [ .A_1
-      [ .F_3
-        [
-        [ .A_1
-          [ .F_4
-            2 ]
-          [ .R_1
-            +
-            [ .A_1
-              [ .F_4
-                3 ]
-              [ .R_2
-                 ] ] ] ]
-        ] ]
-      [ .R_1
-        +
-        [ .A_1
-          [ .F_4
-            4 ]
-          [ .R_2
-             ] ] ] ] ] ]
+\subsubsection{Sample transformation}
+We start by parsing $[2+3]$ with the resulting grammar:\\
+\Tree [ .$A_1$
+  [ .$F_3$
+    '['
+    [ .$A_1$
+      [ .$F_4$
+        2 ]
+      [ .$R_1$
+        '+'
+        [ .$A_1$
+          [ .$F_4$
+            3 ]
+          [ .$R_2$
+            '' ] ] ] ]
+    ']' ]
+  [ .$R_2$
+    '' ] ]
 
-Transformed:\\
-\Tree [ .S_1
-  [ .S_1
-    [ .S_2
-      [ .F_4
-        11 ] ]
-    +
-    [ .F_3
-      [
-      [ .A_1
-        [ .F_4
-          2 ]
-        [ .R_1
-          +
-          [ .A_1
-            [ .F_4
-              3 ]
-            [ .R_2
-               ] ] ] ]
-      ] ] ]
-  +
-  [ .F_4
-    4 ] ]
+Transformed to the original grammar we get:\\
+\Tree [ .$S_2$
+  [ .$F_3$
+    '['
+    [ .$A_1$
+      [ .$F_4$
+        2 ]
+      [ .$R_1$
+        '+'
+        [ .$A_1$
+          [ .$F_4$
+            3 ]
+          [ .$R_2$
+            '' ] ] ] ]
+    ']' ] ]
 
-Transformed backwards:\\
-\Tree [ .A_1
-  [ .F_4
-    11 ]
-  [ .R_1
-    +
-    [ .A_1
-      [ .F_3 
-        [ % fix left/right braces []
-        [ .A_1
-          [ .F_4
-            2 ]
-          [ .R_1
-            +
-            [ .A_1
-              [ .F_4
-                3 ]
-              [ .R_2
-                 ] ] ] ]
-        ] ]
-      [ .R_1
-        +
-        [ .A_1
-          [ .F_4
-            4 ]
-          [ .R_2
-             ] ] ] ] ] ]
+Woah, something wen't wrong there! The tree still contains subtrees of type $A$ and is therefore not of the original grammar. This happened, because we didn't change the type $F$, so the translation of pattern synonyms assumed we were done. To enforce deeper recursion, we add the keyword \verb|force| to \verb|pattern|. This increases tree translation time by a lot, but yields the correct backwards tree:\\
+\Tree [ .$S_2$
+  [ .$F_3$
+    '['
+    [ .$S_1$
+      [ .$S_2$
+        [ .$F_4$
+          2 ] ]
+      '+'
+      [ .$F_4$
+        3 ] ]
+    ']' ] ]
 
-\subsubsection*{More complex grammars}
+Transformed to the right recursive grammar again:\\
+\Tree [ .$A_1$
+  [ .$F_3$
+    '['
+    [ .$A_1$
+      [ .$F_4$
+        2 ]
+      [ .$R_1$
+        '+'
+        [ .$A_1$
+          [ .$F_4$
+            3 ]
+          [ .$R_2$
+            '' ] ] ] ]
+    ']' ]
+  [ .$R_2$
+    '' ] ]
+
+\subsubsection{More complex grammars}
 Transforming more complex grammars and their syntax trees, as in the first case study, is possible but so slow that trees of a depth of more than eight take more than 20 minutes and 12GB RAM without finding a solution on a recent, fast CPU. This is at least partly due to prolog doing more in-depth searches than possibly needed and not searching multi-threaded and could be something to work on in the future.
 
-\subsection*{Left-factoring, inlining and Chomsky-two-form}
+\subsection{Left-factoring, inlining and Chomsky-two-form}
 Left-factoring, inlining and Chomsky-two-form are all quite easy, since they all only insert or remove Nonterminals and move stuff around. As an example we'll look at chomsky-two-form in detail and only show example transformations of the other two. Chomsky-two-form is a variant of chomsky-normal-form where we don't require all rules to be of one of the following forms:
 \begin{verbatim}
 A -> B C
@@ -962,7 +967,7 @@ A -> D
 A -> <TERMINAL>
 \end{verbatim}
 but rather only require them to have at most two atoms on the right hand side.
-\subsubsection*{Grammar}
+\subsubsection{Grammar}
 \begin{lstlisting}[language=grammar]
 start S
 S -> S_2 "if " E " then " S " else " S 
@@ -984,7 +989,7 @@ S4 -> S4_1 "if " E
 S5 -> S5_1 S6 " then "
 S6 -> S6_1 "if " E
 \end{lstlisting}
-\subsubsection*{Transformer}
+\subsubsection{Transformer}
 \begin{lstlisting}[language=transformer]
 start S
 begin
@@ -1013,7 +1018,7 @@ begin
   end
 end
 \end{lstlisting}
-As you can see here, many things can be done automatically and it's easy to write an understandable transformer file. Note the \verb|...D|-atom: it matches one or more nonterminals and terminals. Also note the \verb|force| toggle: it makes the algorithm try harder to transform subtrees. This is needed whenever a subtree's content should change, but it's type stays the same which is mostly needed when doing exhaustive transformations since you have to keep types unchanged when copying rules, otherwise the algorithm doesn't know when to stop applying rules.\\
+As you can see here, many things can be done automatically and it's easy to write an understandable transformer file. Note the \verb|...D|-atom: it matches one or more nonterminals and terminals. Also note the \verb|force| toggle: it makes the algorithm try harder to transform subtrees. This is needed whenever a subtree's content should change, but it's type stays the same, which is mostly needed when doing exhaustive transformations since you have to keep types unchanged when copying rules, otherwise the algorithm doesn't know when to stop applying rules.\\
 Applying this file only once doesn't fully transform the grammar but yields the following:
 \begin{lstlisting}[language=grammar]
 start S
@@ -1049,7 +1054,7 @@ A10 -> A10_2 E A12
 \end{lstlisting}
 which indeed is of the chomsky-two-form.
 
-\subsubsection*{Sample transformation}
+\subsubsection{Sample transformation}
 We'll start by parsing \verb|if 1 then 2 else if 0 then 3|:\\
 \Tree [ .S_2
    if
@@ -1105,9 +1110,9 @@ Transformed backwards:\\
     [ .S_t
       3 ] ] ]
 
-\subsection*{Left-factoring}
+\subsection{Left-factoring}
 In this case study we want to factor out some parts of a grammar rule, so that different rules with the same nonterminal on the left hand side only contain up to one common atom on the right hand side.
-\subsubsection*{Grammar}
+\subsubsection{Grammar}
 \begin{lstlisting}[language=grammar]
 start S
 S -> S_2 "if " E " then " S " else " S
@@ -1126,7 +1131,7 @@ A -> A_1 "if " E1 " then " A S2
 S2 -> S2_1 " else " A
     | S2_2 ""
 \end{lstlisting}
-\subsubsection*{Transformer}
+\subsubsection{Transformer}
 \begin{lstlisting}[language=transformer]
 start A
 begin
@@ -1150,7 +1155,7 @@ begin
   pattern auto
 end
 \end{lstlisting}
-\subsubsection*{Sample transformation}
+\subsubsection{Sample transformation}
 \verb|"if 0 then if 1 then 10 else 0"| parsed:\\
 \Tree [ .S_2
   if
@@ -1205,9 +1210,9 @@ Transformed backwards:\\
     0 ] ]
 
 
-\subsection*{Inlining}
+\subsection{Inlining}
 This case study is effectively the reverse transformation of the last case study: We want to inline some rule to eliminate a nonterminal from the grammar.
-\subsubsection*{Grammar} 
+\subsubsection{Grammar} 
 \begin{lstlisting}[language=grammar]
 start A
 E1 -> E1_T "1"
@@ -1217,7 +1222,7 @@ A -> A_1 "if " E1 " then " A S2
 S2 -> S2_1 " else " A
     | S2_2 ""
 \end{lstlisting}
-\subsubsection*{Transformed grammar}
+\subsubsection{Transformed grammar}
 \begin{lstlisting}[language=grammar]
 start S
 S -> S_2 "if " E " then " S " else " S
@@ -1227,7 +1232,7 @@ E -> E_T "1"
    | E_F "0"
 \end{lstlisting}
 
-\subsubsection*{Transformer}
+\subsubsection{Transformer}
 \begin{lstlisting}[language=transformer]
 start S
 begin
@@ -1251,7 +1256,7 @@ begin
   pattern auto
 end
 \end{lstlisting}
-\subsubsection*{Sample transformation}
+\subsubsection{Sample transformation}
 
 \Tree [ .A_1
   if
@@ -1308,14 +1313,12 @@ end
      ] ]
 
 
-\section*{Conclusion}
-We tried to come up with a way to describe transformations between (context-free) grammars and generate corresponding syntax-tree transformations. Throughout this work we've found that it's not enough to describe how grammar rules change into each other, it's often needed to describe the syntax tree conversions as well.\\
-In some simple cases, describing the information flow may be enough, in other cases pattern synonyms can be enough to express the transformations. It's not clear at this point if there is a need to extend the way of describing the syntax tree conversion further, for example by writing prototype Prolog code.
+
 %TODO: more
 
-\section*{Related works}
-\subsection*{Generating attribute grammar-based bidirectional transformations from rewrite rules\cite{bidirsyn}}
-This work describes a process to generate bidirectional syntax tree transformations from attribute grammar rewrite rules. These rewrite rules are similar to our pattern synonyms, although directed (i.e. always from left to right) but not easily invertible and more constrained in the following ways:
+\section{Related works}
+\subsection{Generating attribute grammar-based bidirectional transformations from rewrite rules}
+This work describes a process to generate bidirectional syntax tree transformations from attribute grammar rewrite rules\cite{bidirsyn}. These rewrite rules are similar to our pattern synonyms, although directed (i.e. always from left to right) but not easily invertible and more constrained in the following ways:
 \lstset{language=transformer}\begin{easylist}[itemize]
 & The left hand side has to be unique disregarding values of parameters, i.e. the following corresponding pattern synonyms would all be considered illegal duplicates of one another:
 && \lstinline{A_1 x = ...}
@@ -1329,7 +1332,7 @@ This work describes a process to generate bidirectional syntax tree transformati
 Our work doesn't try to generate functions as transformations but instead generates relations, therefore allowing more than one transformation result and allowing overlapping patterns.\\
 The paper also doesn't cover grammar transformations.
 
-\subsection*{XSLT}
+\subsection{XSLT}
 XSLT (XSL Transformations) are a way to describe how to transform XML-files (eXtensible Markup Language) to some other document \cite{xslt1}. To describe how to transform a XML, you have access to 
 \begin{easylist}[itemize]
 & searching for a tree node by it's type/node name, or some pattern matching it or it's relative or absolute position in the tree
@@ -1347,8 +1350,8 @@ Since every syntax tree can be transformed to some XML quite easily, this can be
 It therefore doesn't solve left-recursion elimination for recursive descent parsing (it can however describe how to reverse the transformation). XSLT support is implemented in all major browsers \cite{xslt2}.
 %TODO: more
 
-\subsection*{biXid: a bidirectional transformation language for XML\cite{xmlbt}}
-This work explores bidirectional XML transformations using relations and XML-tree walking. It describes relations in a similar way to our Prolog definitions. The following example transforms a Netscape bookmark to an XBEL bookmark:
+\subsection{biXid: a bidirectional transformation language for XML}
+This work explores bidirectional XML transformations using relations and XML-tree walking\cite{xmlbt}. It describes relations in a similar way to our Prolog definitions. The following example transforms a Netscape bookmark to an XBEL bookmark:
 \begin{verbatim}
 relation top =                                 
   html[head[String],                           
@@ -1368,6 +1371,10 @@ relHTMLtoXBELtop(
 However they place some restrictions on the relations which forbid many transformations to transform the XML using two regular automata, no OR in the where-clause is the most significant one. Rotating a tree is not possible, since that needs that exact recursion method, and so transforming between left- and right-recursive trees is impossible, the hardest transformation we looked at.\\
 Also, transforming grammars is not covered.
 
+\section{Conclusion}
+We tried to come up with a way to describe transformations between (context-free) grammars and generate corresponding syntax-tree transformations. Throughout this work we've found that it's not enough to describe how grammar rules change into each other, it's often needed to describe the syntax tree conversions as well.\\
+In some simple cases, describing the information flow may be enough, in other cases pattern synonyms can be enough to express the transformations. It's not clear at this point if there is a need to extend the way of describing the syntax tree conversion further, for example by writing prototype Prolog code.
+
 \begin{thebibliography}{9}
 \bibitem{cnfornotcnf}
   Martin Lange, Hans Leiß, \emph{To CNF or not to CNF? An Efficient Yet Presentable Version of the CYK Algorithm}, 2009.
@@ -1385,5 +1392,17 @@ Also, transforming grammars is not covered.
   Kawanaka, Shinya, and Haruo Hosoya, \emph{biXid: a bidirectional transformation language for XML}, ACM SIGPLAN Notices. Vol. 41. No. 9. ACM, 2006.
 
 \end{thebibliography}
-\url{http://en.wikipedia.org/wiki/Formal_grammar}
+\url{http://en.wikipedia.org/wiki/Formal_grammar}\\
+Source code: \url{https://github.com/plneappl/bsc-thesis}
+\pagebreak
+\section*{Selbständigkeitserklärung}
+Ich versichere, dass ich die Arbeit ohne fremde Hilfe und ohne Benutzung
+anderer als der angegebenen Quellen angefertigt habe und dass die Arbeit in
+gleicher oder ähnlicher Form noch keiner anderen Prüfungsbehörde vorgelegen
+hat und von dieser als Teil einer Prüfungsleistung angenommen wurde.
+Alle Ausführungen, die wörtlich oder sinngemäß übernommen wurden, sind als
+solche gekennzeichnet.\vspace*{7cm}
+
+Simon Wegendt\\\\\\
+Tübingen, den 20. Oktober 2015
 \end{document}

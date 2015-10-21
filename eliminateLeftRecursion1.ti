@@ -1,4 +1,4 @@
 "leftRecursive1.grammar"
 trans("eliminateLeftRecursion1.tr")
-//gTran("1+[2+3]")
-gTran("11+[2+3]+4")
+gTran("[2+3]")
+

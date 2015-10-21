@@ -8,7 +8,7 @@ begin
     out
       S1 -> S1_1 F R
       R  -> R_2 "" | R_1 t S1  
-    pattern
+    pattern 
       S_2 x = S1_1 x (R_2 "")
       //S_1 (S_2 x) t y  = S1_1 x (S_2 y)
       S_1 (S_2 x) t y = S1_1 x (R_1 t (S1_1 y (R_2 "")))

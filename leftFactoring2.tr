@@ -1,0 +1,19 @@
+start A
+begin
+  A = A
+  A_1 = collapse A S_1
+  in
+    S -> S_1 _X:1 ...Y | S_2 _X:1 ...Z
+  out
+    A  -> A_1 _X:1 S1 
+    S1 -> S1_1 ...Y | S1_2 ...Z
+  pattern auto
+end
+begin
+  E1 = E1
+  in
+    E -> E_1 x | E_2 y
+  seq
+    E1 -> E1_1 x | E1_2 y
+  pattern auto
+end

@@ -45,9 +45,9 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
     
   def numberRules(rmtsIn: Seq[GrammarRuleMatcher], rmtsOut: Seq[GrammarRuleMatcher]): (Seq[GrammarRuleMatcher], Seq[GrammarRuleMatcher]) = {
     val used = (rmtsIn.map(_.getIds) ++ rmtsOut.map(_.getIds)).flatten.toSet
-    println(rmtsIn)
-    println(rmtsOut)
-    println(used)
+    //println(rmtsIn)
+    //println(rmtsOut)
+    //println(used)
     var used1 = used
     val rmtsIn2 = rmtsIn.map(rule => {
       val (r, u) = numberRule(rule, used1)
@@ -60,7 +60,7 @@ class ReadableSyntaxGrammar(val input: ParserInput) extends Parser {
       used1 = u
       r
     })
-    println(rmtsIn2 + "\n" + rmtsOut2)
+    //println(rmtsIn2 + "\n" + rmtsOut2)
     (rmtsIn2, rmtsOut2)
   }
     

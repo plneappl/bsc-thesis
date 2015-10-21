@@ -55,9 +55,9 @@ object Main {
     var runs = 1
     do {
       runs = runs + 1
-      println("intermediate grammar: ")
-      println(gTrans)
-      println
+      //println("intermediate grammar: ")
+      //println(gTrans)
+      //println
       val (gTrans2, fwt2, bwt2) = transformMethod(gTrans)
       
       if(gTrans.equalRules(gTrans2.rules) || (limit.isDefined && limit.get < runs)) cont = false
@@ -73,17 +73,17 @@ object Main {
   def parseTest(g: GrammarCC, i: String, fwt: TransformerFunction, bwt: TransformerFunction) = {
     val stOrig = parseWithGrammar(g)(i)
     println
-    println("Input parsed: ")
+    println("Input parsed:\n----------------")
     println(stOrig)
     println(stOrig.latexTree)
     println
     val stTransformed = fwt(stOrig)
-    println("Transformed: ")
+    println("Transformed:\n----------------")
     println(stTransformed.head)
     println(stTransformed.head.latexTree)
     println
     val stBackwards = bwt(stTransformed.head)
-    println("Back again: ")
+    println("Back again:\n----------------")
     println(stBackwards.head)
     println(stBackwards.head.latexTree)
     println

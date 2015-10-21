@@ -79,24 +79,26 @@ object Grammar {
     def unparse = childs.map(_.unparse).mkString("")
     def latexTree(indent: String) = {
       val indent2 = indent + "  "
-      indent + "[ ." + rn + "\n" + childs.map(_.latexTree(indent2)).mkString("\n") + " ]"
+      indent + "[ .$" + rn + "$\n" + childs.map(_.latexTree(indent2)).mkString("\n") + " ]"
     }
   }
 	sealed trait Leaf extends SyntaxTree{
-    def depth = 1
-    def latexTree(indent: String) = indent + unparse
+    def depth = 1    
   }
 	case class LeafString(str: String) extends Leaf {
     def asString(indent: String) = indent + "StrLeaf: " + str
     def unparse = str
+    def latexTree(indent: String) = indent + "'" + str + "'"
   }
 	case class LeafInteger(i: Int) extends Leaf {
     def asString(indent: String) = indent + "IntLeaf: " + i
     def unparse = i.toString
+    def latexTree(indent: String) = indent + i.toString
   }
   case class LeafFloat(f: Double) extends Leaf {
     def asString(indent: String) = indent + "FloatLeaf: " + f
     def unparse = f.toString
+    def latexTree(indent: String) = indent + f.toString
   }
 
 
